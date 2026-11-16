@@ -28,90 +28,131 @@ surreal_http := "http://127.0.0.1:" + surreal_port
 # Demo-only credentials for the throwaway in-memory server on 127.0.0.1.
 surreal_root_pass := "root"
 syncer_pass := "syncer"
+# Seconds `just demo` waits after each transaction of the first, guided purchase.
+guided_pause := env("DEMO_PAUSE", "4")
+# Hides cargo's "already installed" and toolchain notes; real errors still show.
+quiet := "{ grep -v -e 'Ignored package' -e 'is already installed' -e 'toolchain' -e '^$' >&2 || true; }"
+# Prints the last statement's rows, one per line (as JSON without jq).
+last_result := "if command -v jq >/dev/null; then jq -c '.[-1].result[]'; else cat; fi"
 
 # List the recipes
 default:
     @just --list --unsorted
 
-# Run the whole demo: tools, DAR, sandbox, SurrealDB, parties, syncer, purchases, explorer
-demo: tools build-dar sandbox surreal setup sync purchase explorer
+# Run the whole demo: start everything, open the explorer on the empty graph, buy one ticket step by step, then two more
+demo: tools build-dar sandbox surreal setup sync explorer
+    @just purchase 1 {{guided_pause}}
+    @just purchase 2
 
 # Stop everything and delete the demo's data and logs (keeps the installed tools)
 demo-reset: stop
-    rm -rf "{{demo}}/logs" "{{demo}}/run" "{{demo}}/explorer"
+    @rm -rf "{{demo}}/logs" "{{demo}}/run" "{{demo}}/explorer"
     @echo "Reset. The sandbox and SurrealDB kept their data in memory, so it is gone too."
 
 # Install the syncer, the code generator and the explorer into .demo/bin
 tools:
+    @echo "▶ Installing syncer, daml-rust-codegen and surrealdb-explorer (pinned versions)"
     @mkdir -p "{{bin}}"
-    cargo install --locked --root "{{demo}}" --git {{syncer_git}} --rev {{syncer_rev}} syncer
-    cargo install --locked --root "{{demo}}" --git {{codegen_git}} --rev {{codegen_rev}} daml-rust-codegen
-    if [[ -n "{{explorer_path}}" ]]; then \
-        cargo install --locked --root "{{demo}}" --path "{{explorer_path}}"; \
+    @cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --rev {{syncer_rev}} syncer 2>&1 | {{quiet}}
+    @cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --rev {{codegen_rev}} daml-rust-codegen 2>&1 | {{quiet}}
+    @if [[ -n "{{explorer_path}}" ]]; then \
+        cargo install --quiet --locked --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
     else \
-        CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --locked --root "{{demo}}" --git {{explorer_git}} --rev {{explorer_rev}} surrealdb-explorer \
+        CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --rev {{explorer_rev}} surrealdb-explorer 2>&1 | {{quiet}} \
         || { echo "error: could not install surrealdb-explorer from GitHub (the repository may be private)." >&2; \
              echo "Install it from a local clone instead: EXPLORER_PATH=/path/to/surrealdb-explorer just tools" >&2; exit 1; }; \
     fi
 
 # Build the ticket purchase DAR (needs the Daml SDK's dpm)
 build-dar:
-    cd daml && dpm build
+    @echo "▶ Building the ticket purchase model (daml/ → ticket-purchase-0.1.0.dar)"
+    @mkdir -p "{{demo}}"
+    @cd daml && dpm build > "{{demo}}/build-dar.log" 2>&1 || { cat "{{demo}}/build-dar.log" >&2; exit 1; }
 
 # Start a Canton sandbox on port 6865 in the background
 sandbox:
+    @echo "▶ Starting the Canton sandbox (port {{ledger_port}})"
     @if "{{svc}}" listening {{ledger_port}} && ! "{{svc}}" status | grep -q "sandbox: running"; then \
         echo "error: something else already listens on port {{ledger_port}} (another sandbox?)" >&2; exit 1; \
     fi
-    "{{svc}}" start sandbox daml dpm sandbox
-    "{{svc}}" wait-log sandbox "Canton sandbox is ready." 180
+    @"{{svc}}" start sandbox daml dpm sandbox
+    @"{{svc}}" wait-log sandbox "Canton sandbox is ready." 180
 
 # Start an in-memory SurrealDB server and create the syncer's database user
 surreal:
+    @echo "▶ Starting SurrealDB (port {{surreal_port}}) and creating the syncer's database user"
     @if "{{svc}}" listening {{surreal_port}} && ! "{{svc}}" status | grep -q "surreal: running"; then \
         echo "error: something else already listens on port {{surreal_port}}; set DEMO_SURREAL_PORT" >&2; exit 1; \
     fi
-    "{{svc}}" start surreal . surreal start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
-    "{{svc}}" wait-http surreal {{surreal_http}}/health 30
-    just _sql "DEFINE NAMESPACE IF NOT EXISTS canton; USE NS canton; \
+    @"{{svc}}" start surreal . surreal start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
+    @"{{svc}}" wait-http surreal {{surreal_http}}/health 30
+    @just _sql "DEFINE NAMESPACE IF NOT EXISTS canton; USE NS canton; \
         DEFINE DATABASE IF NOT EXISTS ticket_purchase; USE DB ticket_purchase; \
-        DEFINE USER IF NOT EXISTS syncer ON DATABASE PASSWORD '{{syncer_pass}}' ROLES EDITOR;"
+        DEFINE USER IF NOT EXISTS syncer ON DATABASE PASSWORD '{{syncer_pass}}' ROLES EDITOR;" > /dev/null
 
 # Upload the DAR and allocate Alice, TicketWizard and ScroogeBank
 setup:
-    cargo run --quiet -p ticket-purchase -- setup --dar "{{dar}}"
+    @echo "▶ Uploading the model and allocating Alice, TicketWizard and ScroogeBank"
+    @cargo run --quiet -p ticket-purchase -- setup --dar "{{dar}}"
 
 # Start the syncer in the background, following every party on the sandbox
 sync:
-    SURREAL_URL=ws://127.0.0.1:{{surreal_port}} SURREAL_PASSWORD={{syncer_pass}} \
+    @echo "▶ Starting the syncer: ledger → SurrealDB"
+    @SURREAL_URL=ws://127.0.0.1:{{surreal_port}} SURREAL_PASSWORD={{syncer_pass}} \
         "{{svc}}" start syncer . "{{bin}}/syncer" sync --config-file config/syncer.toml
-    "{{svc}}" wait-log syncer "Connected to SurrealDB" 60
+    @"{{svc}}" wait-log syncer "Connected to SurrealDB" 60
 
-# Buy tickets (run again while the explorer is open to watch them arrive)
-purchase count="3":
-    cargo run --quiet -p ticket-purchase -- purchase --count {{count}}
+# Buy tickets; `pause` waits that many seconds after each transaction
+purchase count="3" pause="0":
+    @echo "▶ Buying {{count}} ticket(s)"
+    @cargo run --quiet -p ticket-purchase -- purchase --count {{count}} --pause {{pause}}
 
-# Open the explorer on the demo database (closes when you close the window)
+# Open the explorer on the demo database, in the background
 explorer:
+    @echo "▶ Opening the explorer (Canton view, refreshes by itself)"
     @mkdir -p "{{demo}}/explorer"
     @[[ -f "{{demo}}/explorer/config.toml" ]] || \
         sed 's#ws://127.0.0.1:8001#ws://127.0.0.1:{{surreal_port}}#' config/explorer.toml > "{{demo}}/explorer/config.toml"
-    cd "{{demo}}/explorer" && "{{bin}}/surrealdb-explorer"
+    @"{{svc}}" start explorer "{{demo}}/explorer" "{{bin}}/surrealdb-explorer"
+    @sleep 3
+
+# Show only the latest `n` transactions in the explorer (reopens it)
+explorer-limit n="5":
+    @echo "▶ Showing only the latest {{n}} transactions in the explorer"
+    @"{{svc}}" stop explorer > /dev/null
+    @sed -i.bak 's/^canton_transactions = .*/canton_transactions = {{n}}/' "{{demo}}/explorer/config.toml"
+    @just explorer > /dev/null
+
+# Each ticket agreement with the price paid for it, found by walking the event graph
+tickets:
+    @echo "▶ Ticket agreements and the price paid, from the event graph in SurrealDB"
+    @just _sql "USE NS canton DB ticket_purchase; \
+        SELECT offset, create_arguments.owner AS owner, \
+            (<-consequence<-exercised[WHERE choice_name = 'Accept']->target->created.create_arguments.price)[0][0] AS price \
+        FROM created WHERE template.entity_name = 'TicketAgreement' ORDER BY offset;" \
+        | {{last_result}}
 
 # Show what runs and how much the syncer has written
 status:
     @"{{svc}}" status
-    @if "{{svc}}" listening {{surreal_port}}; then just _sql "USE NS canton DB ticket_purchase; \
-        SELECT count() AS transactions FROM transaction GROUP ALL; \
-        SELECT template_name, count() AS contracts FROM created GROUP BY template_name;"; fi
+    @if "{{svc}}" listening {{surreal_port}}; then \
+        for what in "transactions:transaction" "Cash:created WHERE template.entity_name = 'Cash'" \
+            "TicketOffer:created WHERE template.entity_name = 'TicketOffer'" \
+            "TicketAgreement:created WHERE template.entity_name = 'TicketAgreement'"; do \
+            n=$(just _sql "USE NS canton DB ticket_purchase; RETURN count(SELECT * FROM ${what#*:});" \
+                | grep -o '"result":[0-9]*' | tail -n 1 | cut -d: -f2); \
+            printf '%-16s %s\n' "${what%%:*}" "${n:-0}"; \
+        done; \
+    fi
 
-# Stop the syncer, SurrealDB and the sandbox
+# Stop the explorer, the syncer, SurrealDB and the sandbox
 stop:
-    "{{svc}}" stop syncer
-    "{{svc}}" stop surreal
-    "{{svc}}" stop sandbox
+    @"{{svc}}" stop explorer
+    @"{{svc}}" stop syncer
+    @"{{svc}}" stop surreal
+    @"{{svc}}" stop sandbox
 
-# Follow a service's log: sandbox, surreal or syncer
+# Follow a service's log: sandbox, surreal, syncer or explorer
 logs name="syncer":
     tail -f "{{demo}}/logs/{{name}}.log"
 

@@ -64,48 +64,50 @@ just demo
 ```
 
 The first run builds the three tools into `.demo/bin`, which takes a few
-minutes. Then it:
+minutes. Then it prints one line per step:
 
 1. builds the DAR (`just build-dar`);
 2. starts the sandbox and an in-memory SurrealDB server in the background, and
    creates the syncer's database user (`just sandbox`, `just surreal`);
 3. uploads the DAR and allocates Alice, TicketWizard and ScroogeBank
    (`just setup`);
-4. starts the syncer in the background (`just sync`);
-5. buys three tickets (`just purchase`), printing each transaction's offset;
-6. opens the explorer on the demo database (`just explorer`).
+4. starts the syncer (`just sync`);
+5. opens the explorer on the still empty graph (`just explorer`);
+6. buys one ticket step by step, waiting 4 seconds after each of its three
+   transactions so you can watch each one arrive (`DEMO_PAUSE` changes the
+   wait), then buys two more at full speed.
 
-The explorer starts in its Canton view and refreshes by itself, so with the
-window open you can buy more tickets from another terminal and watch them
-arrive:
+The explorer starts in its Canton view and refreshes by itself. Then try:
 
 ```bash
-just purchase 5
+just purchase 5        # buy more tickets and watch them arrive
+just explorer-limit 5  # show only the latest 5 transactions
+just tickets           # each ticket agreement with the price paid, by walking the graph
+just status            # what runs, and how much the syncer has written
 ```
 
-Closing the window leaves the sandbox, SurrealDB and the syncer running.
-`just status` shows them and counts what the syncer has written, `just
-explorer` opens the window again, and `just stop` stops everything.
-`just demo-reset` stops everything and deletes the demo's logs and settings;
-the sandbox and SurrealDB keep their data in memory, so the next `just demo`
-starts from an empty ledger.
+`just stop` stops everything, including the explorer. `just demo-reset` also
+deletes the demo's logs and settings; the sandbox and SurrealDB keep their
+data in memory, so the next `just demo` starts from an empty ledger.
 
 ## Recipes
 
 | Recipe | What it does |
 |---|---|
-| `just demo` | Everything below, in order |
+| `just demo` | Everything below, in order, with one guided purchase and two more |
 | `just tools` | Installs `syncer`, `daml-rust-codegen` and `surrealdb-explorer` into `.demo/bin` at the pinned commits |
 | `just build-dar` | Builds `daml/.daml/dist/ticket-purchase-0.1.0.dar` |
 | `just sandbox` | Starts the Canton sandbox and waits until it is ready |
 | `just surreal` | Starts SurrealDB in memory and creates the `canton` namespace, the `ticket_purchase` database and the `syncer` user |
 | `just setup` | Uploads the DAR, allocates the parties (safe to repeat) |
 | `just sync` | Starts the syncer, which follows every party on the sandbox |
-| `just purchase [count]` | Buys `count` tickets (default 3) |
-| `just explorer` | Opens the explorer |
+| `just explorer` | Opens the explorer in the background |
+| `just purchase [count] [pause]` | Buys `count` tickets (default 3), waiting `pause` seconds after each transaction (default 0) |
+| `just explorer-limit [n]` | Reopens the explorer showing only the latest `n` transactions (default 5) |
+| `just tickets` | Lists each ticket agreement with the price paid for it, found by walking from the agreement to the `Accept` choice and its offer |
 | `just status` | Shows what runs, and the transaction and contract counts in SurrealDB |
-| `just logs [name]` | Follows the log of `sandbox`, `surreal` or `syncer` |
-| `just stop` | Stops the syncer, SurrealDB and the sandbox |
+| `just logs [name]` | Follows the log of `sandbox`, `surreal`, `syncer` or `explorer` |
+| `just stop` | Stops the explorer, the syncer, SurrealDB and the sandbox, and waits until their ports are free |
 | `just demo-reset` | Stops everything and deletes `.demo/logs`, `.demo/run` and `.demo/explorer` |
 
 The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`

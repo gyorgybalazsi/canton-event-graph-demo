@@ -55,6 +55,10 @@ enum Step {
         /// Price of the first ticket; each further one costs 5 more
         #[arg(long, default_value_t = 10.0)]
         price: f64,
+        /// Seconds to wait after each transaction, so a viewer can follow
+        /// each one arriving in the explorer (0: no pause)
+        #[arg(long, default_value_t = 0)]
+        pause: u64,
     },
 }
 
@@ -82,24 +86,31 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Step::Setup { dar } => setup(&cli.url, &dar).await,
-        Step::Purchase { count, price } => purchase(&cli.url, count, price).await,
+        Step::Purchase {
+            count,
+            price,
+            pause,
+        } => purchase(&cli.url, count, price, pause).await,
     }
 }
 
 async fn setup(url: &str, dar: &std::path::Path) -> Result<()> {
     let package_id = ledger::upload_model(url, dar).await?;
-    println!("Uploaded {} (package {package_id})", dar.display());
-    let parties = Parties::get(url).await?;
-    println!("Parties:");
-    println!("  buyer      {}", parties.buyer);
-    println!("  organizer  {}", parties.organizer);
-    println!("  bank       {}", parties.bank);
+    println!("  model uploaded (package {})", short(&package_id));
+    let p = Parties::get(url).await?;
+    println!(
+        "  parties: {}, {}, {}",
+        short(&p.buyer),
+        short(&p.organizer),
+        short(&p.bank)
+    );
     Ok(())
 }
 
-async fn purchase(url: &str, count: u32, first_price: f64) -> Result<()> {
+async fn purchase(url: &str, count: u32, first_price: f64, pause: u64) -> Result<()> {
     let p = Parties::get(url).await?;
     let mut ledger = Ledger::connect(url).await?;
+    let wait = || tokio::time::sleep(std::time::Duration::from_secs(pause));
 
     for i in 0..count {
         let price = first_price + 5.0 * f64::from(i);
@@ -116,9 +127,10 @@ async fn purchase(url: &str, count: u32, first_price: f64) -> Result<()> {
             .await?;
         let cash_id = tx.created("Cash")?.to_string();
         println!(
-            "  TX@{:<4} {BANK} issues {price} cash to {BUYER}",
+            "  1/3  TX@{:<4} {BANK} issues {price} cash to {BUYER}",
             tx.offset
         );
+        wait().await;
 
         // 2. The organizer offers the buyer a ticket.
         let offer = TicketOffer {
@@ -133,7 +145,11 @@ async fn purchase(url: &str, count: u32, first_price: f64) -> Result<()> {
             )
             .await?;
         let offer_id = tx.created("TicketOffer")?.to_string();
-        println!("  TX@{:<4} {ORGANIZER} offers {BUYER} a ticket", tx.offset);
+        println!(
+            "  2/3  TX@{:<4} {ORGANIZER} offers {BUYER} a ticket for {price}",
+            tx.offset
+        );
+        wait().await;
 
         // 3. The buyer accepts, paying with the cash.
         let accept = Accept {
@@ -152,11 +168,22 @@ async fn purchase(url: &str, count: u32, first_price: f64) -> Result<()> {
             .await?;
         tx.created("TicketAgreement")?;
         println!(
-            "  TX@{:<4} {BUYER} accepts: the cash goes to {ORGANIZER}, the ticket agreement is created",
+            "  3/3  TX@{:<4} {BUYER} accepts: cash goes to {ORGANIZER}, ticket agreement created",
             tx.offset
         );
+        wait().await;
     }
     Ok(())
+}
+
+/// A party or package id shortened for display: `Alice::1220ab…`.
+fn short(id: &str) -> String {
+    match id.split_once("::") {
+        Some((name, fingerprint)) => {
+            format!("{name}::{}…", &fingerprint[..fingerprint.len().min(6)])
+        }
+        None => format!("{}…", &id[..id.len().min(12)]),
+    }
 }
 
 fn create(entity: &str, arguments: ledger_api::v2::Record) -> command::Command {
