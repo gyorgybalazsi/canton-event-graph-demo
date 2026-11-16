@@ -137,6 +137,14 @@ tickets:
         | if command -v jq >/dev/null; then \
             jq -r '.[-1].result[] | "  TX@\(.offset)  \(.owner) paid \(.price)"'; else cat; fi
 
+# The events of the transaction at `offset`: created contracts' arguments and exercised choices' arguments
+show offset:
+    @echo "▶ Events of TX@{{offset}} (party ids shortened, contract ids cut)"
+    @just _sql "USE NS canton DB ticket_purchase; \
+        SELECT node_id, name, 'exercised' AS kind, choice_argument AS args, acting_parties AS parties FROM exercised WHERE offset = {{offset}}; \
+        SELECT node_id, name, 'created' AS kind, create_arguments AS args, signatories AS parties FROM created WHERE offset = {{offset}};" \
+        | jq -r 'def short: walk(if type == "string" then (gsub("::[0-9a-f]+"; "") | if test("^[0-9a-f]{40,}$") then .[0:10] + "…" else . end) else . end); [.[-2].result[], .[-1].result[]] | sort_by(.node_id)[] | short | "  node \(.node_id)  \(.name)  " + (if .kind == "exercised" then "exercised by \(.parties | join(", "))" else "created, signed by \(.parties | join(", "))" end) + "\n" + (if (.args | length) == 0 then "      (no argument)" else (.args | to_entries | map("      \(.key): \(.value | if type == "string" then . else tojson end)") | join("\n")) end) + "\n"'
+
 # Show what runs and how much the syncer has written
 status:
     @"{{svc}}" status
