@@ -95,7 +95,7 @@ data in memory, so the next `just demo` starts from an empty ledger.
 | Recipe | What it does |
 |---|---|
 | `just demo` | Everything below, in order, with one guided purchase and two more |
-| `just tools` | Installs `syncer`, `daml-rust-codegen` and `surrealdb-explorer` into `.demo/bin` at the pinned commits |
+| `just tools` | Installs `syncer`, `daml-rust-codegen` and `surrealdb-explorer` into `.demo/bin` at the pinned commits, skipping what is already installed (an explorer installed from a local clone counts) |
 | `just build-dar` | Builds `daml/.daml/dist/ticket-purchase-0.1.0.dar` |
 | `just sandbox` | Starts the Canton sandbox and waits until it is ready |
 | `just surreal` | Starts SurrealDB in memory and creates the `canton` namespace, the `ticket_purchase` database and the `syncer` user |

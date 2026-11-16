@@ -32,8 +32,10 @@ syncer_pass := "syncer"
 guided_pause := env("DEMO_PAUSE", "4")
 # Hides cargo's "already installed" and toolchain notes; real errors still show.
 quiet := "{ grep -v -e 'Ignored package' -e 'is already installed' -e 'toolchain' -e '^$' >&2 || true; }"
+# Whether cargo's install record in .demo matches a pattern (a tool at the pinned
+# rev, or the explorer installed from a local clone, is not fetched again).
+installed := "grep -qsE"
 # Prints the last statement's rows, one per line (as JSON without jq).
-last_result := "if command -v jq >/dev/null; then jq -c '.[-1].result[]'; else cat; fi"
 
 # List the recipes
 default:
@@ -49,15 +51,17 @@ demo-reset: stop
     @rm -rf "{{demo}}/logs" "{{demo}}/run" "{{demo}}/explorer"
     @echo "Reset. The sandbox and SurrealDB kept their data in memory, so it is gone too."
 
-# Install the syncer, the code generator and the explorer into .demo/bin
+# Install the syncer, the code generator and the explorer into .demo/bin (skips what is already installed)
 tools:
     @echo "▶ Installing syncer, daml-rust-codegen and surrealdb-explorer (pinned versions)"
     @mkdir -p "{{bin}}"
-    @cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --rev {{syncer_rev}} syncer 2>&1 | {{quiet}}
-    @cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --rev {{codegen_rev}} daml-rust-codegen 2>&1 | {{quiet}}
+    @{{installed}} "syncer .*rev={{syncer_rev}}" "{{demo}}/.crates.toml" || \
+        cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --rev {{syncer_rev}} syncer 2>&1 | {{quiet}}
+    @{{installed}} "daml-rust-codegen .*rev={{codegen_rev}}" "{{demo}}/.crates.toml" || \
+        cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --rev {{codegen_rev}} daml-rust-codegen 2>&1 | {{quiet}}
     @if [[ -n "{{explorer_path}}" ]]; then \
         cargo install --quiet --locked --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
-    else \
+    elif ! {{installed}} "surrealdb-explorer .*(rev={{explorer_rev}}|path\+)" "{{demo}}/.crates.toml"; then \
         CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --rev {{explorer_rev}} surrealdb-explorer 2>&1 | {{quiet}} \
         || { echo "error: could not install surrealdb-explorer from GitHub (the repository may be private)." >&2; \
              echo "Install it from a local clone instead: EXPLORER_PATH=/path/to/surrealdb-explorer just tools" >&2; exit 1; }; \
@@ -127,10 +131,11 @@ explorer-limit n="5":
 tickets:
     @echo "▶ Ticket agreements and the price paid, from the event graph in SurrealDB"
     @just _sql "USE NS canton DB ticket_purchase; \
-        SELECT offset, create_arguments.owner AS owner, \
-            (<-consequence<-exercised[WHERE choice_name = 'Accept']->target->created.create_arguments.price)[0][0] AS price \
+        SELECT offset, string::split(create_arguments.owner, '::')[0] AS owner, \
+            (<-consequence<-exercised[WHERE choice_name = 'Accept']->target->created.create_arguments.price)[0] AS price \
         FROM created WHERE template.entity_name = 'TicketAgreement' ORDER BY offset;" \
-        | {{last_result}}
+        | if command -v jq >/dev/null; then \
+            jq -r '.[-1].result[] | "  TX@\(.offset)  \(.owner) paid \(.price)"'; else cat; fi
 
 # Show what runs and how much the syncer has written
 status:
