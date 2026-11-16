@@ -12,7 +12,8 @@ codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
 codegen_rev := "308c6bd279787c3697f051c18ba2e47a2f547bc3"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
 explorer_rev := "f8995b8a27fb1d8d46087ff80f4f9ed209a849bf"
-# Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it instead.
+# Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
+# instead (needed while that repository is private).
 explorer_path := env("EXPLORER_PATH", "")
 
 demo := justfile_directory() / ".demo"
@@ -48,7 +49,9 @@ tools:
     if [[ -n "{{explorer_path}}" ]]; then \
         cargo install --locked --root "{{demo}}" --path "{{explorer_path}}"; \
     else \
-        CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --locked --root "{{demo}}" --git {{explorer_git}} --rev {{explorer_rev}} surrealdb-explorer; \
+        CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --locked --root "{{demo}}" --git {{explorer_git}} --rev {{explorer_rev}} surrealdb-explorer \
+        || { echo "error: could not install surrealdb-explorer from GitHub (the repository may be private)." >&2; \
+             echo "Install it from a local clone instead: EXPLORER_PATH=/path/to/surrealdb-explorer just tools" >&2; exit 1; }; \
     fi
 
 # Build the ticket purchase DAR (needs the Daml SDK's dpm)
