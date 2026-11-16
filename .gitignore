@@ -1,0 +1,7 @@
+**/.DS_Store
+/target
+**/.daml
+# Canton's log, written next to daml.yaml by `dpm sandbox`.
+/daml/log
+# Everything `just demo` creates: installed tools, configs, logs, pid files.
+/.demo

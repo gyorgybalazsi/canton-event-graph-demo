@@ -1,0 +1,148 @@
+# canton-event-graph-demo
+
+An end-to-end demo of a Canton ledger's event graph. One command starts a
+Canton sandbox, buys a few tickets on it from a small Rust program, syncs the
+ledger into SurrealDB and opens a desktop window that draws the transactions
+as a graph.
+
+```
+ daml/Main.daml ──dpm build──▶ ticket-purchase.dar ──daml-rust-codegen──▶ Rust types
+                                      │                                      │
+                                      ▼                                      ▼
+                               Canton sandbox ◀──── commands ──── app/ (ticket-purchase)
+                                      │
+                                   syncer
+                                      ▼
+                                  SurrealDB ──────▶ surrealdb-explorer
+```
+
+The pieces come from their own repositories and are pinned to known commits,
+not copied:
+
+| Piece | Repository | Used for |
+|---|---|---|
+| `daml-rust-codegen` | [daml-rust-codegen](https://github.com/gyorgybalazsi/daml-rust-codegen) | Generates the Rust types for the Daml model, at build time |
+| `syncer`, and the `client` / `ledger-api` / `daml-type-rep` / `derive-lapi-access` crates | [canton-event-graph-syncer](https://github.com/gyorgybalazsi/canton-event-graph-syncer) | Streams the ledger into SurrealDB; the app talks to the ledger with the crates |
+| `surrealdb-explorer` | [surrealdb-explorer](https://github.com/gyorgybalazsi/surrealdb-explorer) | Draws the event graph |
+
+## The model
+
+[`daml/daml/Main.daml`](daml/daml/Main.daml) has three templates:
+
+- `Cash`, issued by a bank to an owner, with a `Transfer` choice;
+- `TicketOffer`, from an organizer to a buyer at a price, with an `Accept`
+  choice that takes the buyer's cash;
+- `TicketAgreement`, the ticket, signed by both.
+
+The app ([`app/src/main.rs`](app/src/main.rs)) buys tickets as three parties:
+ScroogeBank issues cash to Alice, TicketWizard offers Alice a ticket, and Alice
+accepts. Accepting is one transaction that archives the offer, transfers the
+cash to TicketWizard and creates the ticket agreement, so in the explorer it is
+a tree: `Accept` → `Transfer` → the new `Cash` and the archived old one, plus
+the `TicketAgreement`.
+
+## Prerequisites
+
+- **Rust** via [rustup](https://rustup.rs) (the version is pinned in `rust-toolchain.toml`)
+- **[protoc](https://protobuf.dev/installation/)**, for the Ledger API bindings (`brew install protobuf`)
+- **Daml SDK 3.7.1** with `dpm` (`dpm install 3.7.1`), for the DAR and the sandbox
+- **[SurrealDB](https://surrealdb.com/install) 4.x**, the `surreal` program
+- **[just](https://github.com/casey/just)** (`brew install just`)
+- **curl**, and git access to the three repositories above. surrealdb-explorer
+  is private for now: without access to it, install it from a local clone with
+  `EXPLORER_PATH=~/surrealdb-explorer just tools` (the clone should be at the
+  commit pinned in the `justfile`), then run `just demo`
+
+Ports 6865–6869 (sandbox) and 8001 (SurrealDB) must be free. The demo uses
+8001 rather than SurrealDB's usual 8000 so it doesn't collide with a server
+you already run; set `DEMO_SURREAL_PORT` to use another.
+
+## Run it
+
+```bash
+just demo
+```
+
+The first run builds the three tools into `.demo/bin`, which takes a few
+minutes. Then it prints one line per step:
+
+1. builds the DAR (`just build-dar`);
+2. starts the sandbox and an in-memory SurrealDB server in the background, and
+   creates the syncer's database user (`just sandbox`, `just surreal`);
+3. uploads the DAR and allocates Alice, TicketWizard and ScroogeBank
+   (`just setup`);
+4. starts the syncer (`just sync`);
+5. opens the explorer on the still empty graph (`just explorer`);
+6. buys one ticket step by step, waiting 4 seconds after each of its three
+   transactions so you can watch each one arrive (`DEMO_PAUSE` changes the
+   wait), then buys two more at full speed.
+
+The explorer starts in its Canton view and refreshes by itself. Then try:
+
+```bash
+just purchase 5        # buy more tickets and watch them arrive
+just explorer-limit 5  # show only the latest 5 transactions
+just tickets           # each ticket agreement with the price paid, by walking the graph
+just status            # what runs, and how much the syncer has written
+```
+
+`just stop` stops everything, including the explorer. `just demo-reset` also
+deletes the demo's logs and settings; the sandbox and SurrealDB keep their
+data in memory, so the next `just demo` starts from an empty ledger.
+
+## Recipes
+
+| Recipe | What it does |
+|---|---|
+| `just demo` | Everything below, in order, with one guided purchase and two more |
+| `just tools` | Installs `syncer`, `daml-rust-codegen` and `surrealdb-explorer` into `.demo/bin` at the pinned commits |
+| `just build-dar` | Builds `daml/.daml/dist/ticket-purchase-0.1.0.dar` |
+| `just sandbox` | Starts the Canton sandbox and waits until it is ready |
+| `just surreal` | Starts SurrealDB in memory and creates the `canton` namespace, the `ticket_purchase` database and the `syncer` user |
+| `just setup` | Uploads the DAR, allocates the parties (safe to repeat) |
+| `just sync` | Starts the syncer, which follows every party on the sandbox |
+| `just explorer` | Opens the explorer in the background |
+| `just purchase [count] [pause]` | Buys `count` tickets (default 3), waiting `pause` seconds after each transaction (default 0) |
+| `just explorer-limit [n]` | Reopens the explorer showing only the latest `n` transactions (default 5) |
+| `just tickets` | Lists each ticket agreement with the price paid for it, found by walking from the agreement to the `Accept` choice and its offer |
+| `just status` | Shows what runs, and the transaction and contract counts in SurrealDB |
+| `just logs [name]` | Follows the log of `sandbox`, `surreal`, `syncer` or `explorer` |
+| `just stop` | Stops the explorer, the syncer, SurrealDB and the sandbox, and waits until their ports are free |
+| `just demo-reset` | Stops everything and deletes `.demo/logs`, `.demo/run` and `.demo/explorer` |
+
+The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
+(gitignored).
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `daml/` | The Daml model, built into a DAR with `dpm build` |
+| `app/` | The Rust client. `build.rs` runs `daml-rust-codegen` on the DAR, and `src/model.rs` includes the output, so the types always match the model |
+| `config/` | The syncer's and the explorer's settings for the demo |
+| `scripts/demo.sh` | Starts, waits for and stops the background services |
+| `justfile` | The recipes, and the pinned commits of the tools |
+
+## Changing things
+
+- **The model.** Edit `daml/daml/Main.daml` and run `just build-dar`; the next
+  build of the app regenerates its types. If you rename a template or choice,
+  the app stops compiling where it uses it, which is the point of generating
+  the types.
+- **Tool versions.** The commits are at the top of the `justfile`. The app's
+  ledger crates in `app/Cargo.toml` are pinned to the same
+  canton-event-graph-syncer commit as the syncer; bump them together.
+- **The explorer from a local clone.** `EXPLORER_PATH=~/surrealdb-explorer just tools`
+  installs it from your clone instead of GitHub.
+- **Building the app without the Daml SDK.** Point `TICKET_PURCHASE_GENERATED`
+  at an already generated file, or `TICKET_PURCHASE_DAR` / `DAML_RUST_CODEGEN`
+  at another DAR or codegen program (see `app/build.rs`).
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+
+at your option.
