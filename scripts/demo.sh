@@ -55,17 +55,27 @@ wait_http() {
     die "$name did not answer at $url within $seconds s"
 }
 
-# Kills a process and everything it started (dpm starts a JVM, for example).
-kill_tree() {
+# A process and everything it started (dpm starts a JVM, for example).
+tree() {
     local pid="$1" child
-    for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
-    kill "$pid" 2>/dev/null || true
+    echo "$pid"
+    for child in $(pgrep -P "$pid" 2>/dev/null); do tree "$child"; done
 }
 
+# Stops a service and waits until all its processes have exited, so its ports
+# are free when this returns (the sandbox's JVM takes a few seconds).
 stop() {
-    local name="$1" pidfile="$run/$1.pid"
+    local name="$1" pidfile="$run/$1.pid" pids pid
     if running "$name"; then
-        kill_tree "$(cat "$pidfile")"
+        pids="$(tree "$(cat "$pidfile")")"
+        kill $pids 2>/dev/null || true
+        for _ in $(seq 30); do
+            alive=""
+            for pid in $pids; do kill -0 "$pid" 2>/dev/null && alive=1; done
+            [[ -z "$alive" ]] && break
+            sleep 1
+        done
+        [[ -n "$alive" ]] && kill -9 $pids 2>/dev/null || true
         echo "stopped $name"
     fi
     rm -f "$pidfile"
