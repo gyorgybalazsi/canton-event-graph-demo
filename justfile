@@ -76,7 +76,7 @@ build-dar:
 # Start a Canton sandbox on port 6865 in the background
 sandbox:
     @echo "▶ Starting the Canton sandbox (port {{ledger_port}})"
-    @if "{{svc}}" listening {{ledger_port}} && ! "{{svc}}" status | grep -q "sandbox: running"; then \
+    @if "{{svc}}" listening {{ledger_port}} && [[ "$("{{svc}}" status)" != *"sandbox: running"* ]]; then \
         echo "error: something else already listens on port {{ledger_port}} (another sandbox?)" >&2; exit 1; \
     fi
     @"{{svc}}" start sandbox daml dpm sandbox
@@ -85,7 +85,7 @@ sandbox:
 # Start an in-memory SurrealDB server and create the syncer's database user
 surreal:
     @echo "▶ Starting SurrealDB (port {{surreal_port}}) and creating the syncer's database user"
-    @if "{{svc}}" listening {{surreal_port}} && ! "{{svc}}" status | grep -q "surreal: running"; then \
+    @if "{{svc}}" listening {{surreal_port}} && [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then \
         echo "error: something else already listens on port {{surreal_port}}; set DEMO_SURREAL_PORT" >&2; exit 1; \
     fi
     @"{{svc}}" start surreal . surreal start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
