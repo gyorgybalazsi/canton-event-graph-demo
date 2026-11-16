@@ -51,7 +51,7 @@ the `TicketAgreement`.
 - **curl**, and git access to the three repositories above. surrealdb-explorer
   is private for now: without access to it, install it from a local clone with
   `EXPLORER_PATH=~/surrealdb-explorer just tools` (the clone should be at the
-  commit pinned in the `justfile`), then run `just demo`
+  commit pinned in the `justfile`; `just tools` rebuilds it from the clone each time), then run `just demo`
 
 Ports 6865–6869 (sandbox) and 8001 (SurrealDB) must be free. The demo uses
 8001 rather than SurrealDB's usual 8000 so it doesn't collide with a server

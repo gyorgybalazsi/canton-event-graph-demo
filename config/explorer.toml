@@ -19,6 +19,9 @@ visualization = "canton"
 auto_refresh = true
 refresh_seconds = 2
 canton_transactions = 50
+# Transactions drawn side by side; a wider graph scrolls. Three fit the three
+# transactions of one ticket purchase.
+canton_columns = 3
 connect_results = true
 
 [logging]

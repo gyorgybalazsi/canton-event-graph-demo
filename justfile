@@ -11,7 +11,7 @@ syncer_rev := "9f25cb06ccf43af23b2f41bcad0355f17567d7db"
 codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
 codegen_rev := "308c6bd279787c3697f051c18ba2e47a2f547bc3"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
-explorer_rev := "f8995b8a27fb1d8d46087ff80f4f9ed209a849bf"
+explorer_rev := "67786d9c1622442ff30e8c20acc3289647871065"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead (needed while that repository is private).
 explorer_path := env("EXPLORER_PATH", "")
@@ -60,7 +60,7 @@ tools:
     @{{installed}} "daml-rust-codegen .*rev={{codegen_rev}}" "{{demo}}/.crates.toml" || \
         cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --rev {{codegen_rev}} daml-rust-codegen 2>&1 | {{quiet}}
     @if [[ -n "{{explorer_path}}" ]]; then \
-        cargo install --quiet --locked --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
+        cargo install --quiet --locked --force --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
     elif ! {{installed}} "surrealdb-explorer .*(rev={{explorer_rev}}|path\+)" "{{demo}}/.crates.toml"; then \
         CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --rev {{explorer_rev}} surrealdb-explorer 2>&1 | {{quiet}} \
         || { echo "error: could not install surrealdb-explorer from GitHub (the repository may be private)." >&2; \
