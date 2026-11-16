@@ -11,7 +11,7 @@ syncer_rev := "9f25cb06ccf43af23b2f41bcad0355f17567d7db"
 codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
 codegen_rev := "308c6bd279787c3697f051c18ba2e47a2f547bc3"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
-explorer_rev := "f8995b8a27fb1d8d46087ff80f4f9ed209a849bf"
+explorer_rev := "67786d9c1622442ff30e8c20acc3289647871065"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead (needed while that repository is private).
 explorer_path := env("EXPLORER_PATH", "")
@@ -60,7 +60,7 @@ tools:
     @{{installed}} "daml-rust-codegen .*rev={{codegen_rev}}" "{{demo}}/.crates.toml" || \
         cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --rev {{codegen_rev}} daml-rust-codegen 2>&1 | {{quiet}}
     @if [[ -n "{{explorer_path}}" ]]; then \
-        cargo install --quiet --locked --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
+        cargo install --quiet --locked --force --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
     elif ! {{installed}} "surrealdb-explorer .*(rev={{explorer_rev}}|path\+)" "{{demo}}/.crates.toml"; then \
         CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --rev {{explorer_rev}} surrealdb-explorer 2>&1 | {{quiet}} \
         || { echo "error: could not install surrealdb-explorer from GitHub (the repository may be private)." >&2; \
@@ -76,7 +76,7 @@ build-dar:
 # Start a Canton sandbox on port 6865 in the background
 sandbox:
     @echo "▶ Starting the Canton sandbox (port {{ledger_port}})"
-    @if "{{svc}}" listening {{ledger_port}} && ! "{{svc}}" status | grep -q "sandbox: running"; then \
+    @if "{{svc}}" listening {{ledger_port}} && [[ "$("{{svc}}" status)" != *"sandbox: running"* ]]; then \
         echo "error: something else already listens on port {{ledger_port}} (another sandbox?)" >&2; exit 1; \
     fi
     @"{{svc}}" start sandbox daml dpm sandbox
@@ -85,7 +85,7 @@ sandbox:
 # Start an in-memory SurrealDB server and create the syncer's database user
 surreal:
     @echo "▶ Starting SurrealDB (port {{surreal_port}}) and creating the syncer's database user"
-    @if "{{svc}}" listening {{surreal_port}} && ! "{{svc}}" status | grep -q "surreal: running"; then \
+    @if "{{svc}}" listening {{surreal_port}} && [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then \
         echo "error: something else already listens on port {{surreal_port}}; set DEMO_SURREAL_PORT" >&2; exit 1; \
     fi
     @"{{svc}}" start surreal . surreal start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
@@ -136,6 +136,14 @@ tickets:
         FROM created WHERE template.entity_name = 'TicketAgreement' ORDER BY offset;" \
         | if command -v jq >/dev/null; then \
             jq -r '.[-1].result[] | "  TX@\(.offset)  \(.owner) paid \(.price)"'; else cat; fi
+
+# The events of the transaction at `offset`: created contracts' arguments and exercised choices' arguments
+show offset:
+    @echo "▶ Events of TX@{{offset}} (party ids shortened, contract ids cut)"
+    @just _sql "USE NS canton DB ticket_purchase; \
+        SELECT node_id, name, 'exercised' AS kind, choice_argument AS args, acting_parties AS parties FROM exercised WHERE offset = {{offset}}; \
+        SELECT node_id, name, 'created' AS kind, create_arguments AS args, signatories AS parties FROM created WHERE offset = {{offset}};" \
+        | jq -r 'def short: walk(if type == "string" then (gsub("::[0-9a-f]+"; "") | if test("^[0-9a-f]{40,}$") then .[0:10] + "…" else . end) else . end); [.[-2].result[], .[-1].result[]] | sort_by(.node_id)[] | short | "  node \(.node_id)  \(.name)  " + (if .kind == "exercised" then "exercised by \(.parties | join(", "))" else "created, signed by \(.parties | join(", "))" end) + "\n" + (if (.args | length) == 0 then "      (no argument)" else (.args | to_entries | map("      \(.key): \(.value | if type == "string" then . else tojson end)") | join("\n")) end) + "\n"'
 
 # Show what runs and how much the syncer has written
 status:
