@@ -1,0 +1,52 @@
+-- The ticket purchase model: a bank issues cash to a buyer, an organizer
+-- offers the buyer a ticket, and the buyer accepts the offer by paying with
+-- the cash. Accepting pays the organizer and creates the ticket agreement in
+-- one transaction, so the event graph shows the whole purchase as a tree.
+module Main where
+
+import DA.Assert ((===))
+
+template TicketOffer
+  with
+    organizer : Party
+    buyer : Party
+    price : Decimal
+  where
+    signatory organizer
+    observer buyer
+
+    choice Accept : ContractId TicketAgreement
+      with
+        cashId : ContractId Cash
+      controller buyer
+      do
+        cash <- fetch cashId
+        cash.amount === price
+        exercise cashId Transfer with
+          newOwner = organizer
+        create TicketAgreement with
+          organizer; owner = buyer
+
+template Cash
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory issuer
+    observer owner
+
+    nonconsuming choice Transfer : ()
+      with
+        newOwner : Party
+      controller owner
+      do
+        create this with owner = newOwner
+        archive self
+
+template TicketAgreement
+  with
+    organizer : Party
+    owner : Party
+  where
+    signatory organizer, owner

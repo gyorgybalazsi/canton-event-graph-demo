@@ -1,0 +1,21 @@
+# Syncer settings for the demo. `just sync` passes the SurrealDB address and
+# the syncer user's password as SURREAL_URL and SURREAL_PASSWORD.
+active_profile = "demo"
+
+[logging]
+level = "info"
+
+[surrealdb]
+namespace = "canton"
+database = "ticket_purchase"
+username = "syncer"
+batch_size = 100
+flush_timeout_secs = 1
+idle_timeout_secs = 60
+
+[profiles.demo.ledger]
+# The sandbox runs without authentication, so any user name works here.
+fake_jwt_user = "ticket-purchase-demo"
+url = "http://localhost:6865"
+# No `parties`: the syncer follows every party on the participant, so start it
+# after `just setup` has allocated them.

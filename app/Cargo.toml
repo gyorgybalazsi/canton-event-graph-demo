@@ -1,0 +1,23 @@
+[package]
+name = "ticket-purchase"
+version = "0.1.0"
+edition = "2024"
+description = "Submits a scripted ticket purchase flow to a Canton sandbox, using Rust types generated from the Daml model"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# The Ledger API client crates come from canton-event-graph-syncer, pinned to
+# the same commit as the syncer the justfile installs (SYNCER_REV).
+[dependencies]
+client = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "9f25cb06ccf43af23b2f41bcad0355f17567d7db" }
+ledger-api = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "9f25cb06ccf43af23b2f41bcad0355f17567d7db" }
+daml-type-rep = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "9f25cb06ccf43af23b2f41bcad0355f17567d7db" }
+derive-lapi-access = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "9f25cb06ccf43af23b2f41bcad0355f17567d7db" }
+anyhow = "1.0.98"
+clap = { version = "4.5.40", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tonic = { version = "0.13.1", features = ["transport"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.17.0", features = ["v4"] }

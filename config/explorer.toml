@@ -1,0 +1,30 @@
+# surrealdb-explorer settings for the demo. `just explorer` copies this file to
+# .demo/explorer/config.toml on the first run; the app's Settings save there.
+# The address is replaced with the demo's SurrealDB server.
+
+[database]
+connection = "server"
+server = "ws://127.0.0.1:8001"
+# The demo's in-memory SurrealDB server only listens on 127.0.0.1 and holds
+# nothing but demo data, so it uses a fixed root password.
+username = "root"
+user_level = "root"
+password = "root"
+namespace = "canton"
+database = "ticket_purchase"
+
+[graph]
+visualization = "canton"
+# Redraw while the syncer streams new transactions in.
+auto_refresh = true
+refresh_seconds = 2
+canton_transactions = 50
+connect_results = true
+
+[logging]
+level = "info"
+directory = "logs"
+
+[mcp]
+# Off, so the demo window doesn't clash with an explorer you already run.
+enabled = false

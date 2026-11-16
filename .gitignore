@@ -1,0 +1,5 @@
+**/.DS_Store
+/target
+**/.daml
+# Everything `just demo` creates: installed tools, configs, logs, pid files.
+/.demo
