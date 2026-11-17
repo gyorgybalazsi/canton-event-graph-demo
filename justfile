@@ -7,11 +7,11 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 # Bump a rev to try a newer version (and the `client`/`ledger-api` revs in
 # app/Cargo.toml together with SYNCER_REV).
 syncer_git := "https://github.com/gyorgybalazsi/canton-event-graph-syncer"
-syncer_rev := "9f25cb06ccf43af23b2f41bcad0355f17567d7db"
+syncer_rev := "6f9084a91f53ed3ecdce6f08d5b213cef787efb0"
 codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
 codegen_rev := "308c6bd279787c3697f051c18ba2e47a2f547bc3"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
-explorer_rev := "67786d9c1622442ff30e8c20acc3289647871065"
+explorer_rev := "c07a9009ed70fae9059bed5db2d40491f9a9e65b"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead (needed while that repository is private).
 explorer_path := env("EXPLORER_PATH", "")
@@ -42,7 +42,9 @@ default:
     @just --list --unsorted
 
 # Run the whole demo: start everything, open the explorer on the empty graph, buy one ticket step by step, then two more
-demo: tools build-dar sandbox surreal setup sync explorer
+# SurrealDB and the explorer come first, so the explorer is open on the empty
+# graph and everything after it, setup included, shows up as it happens.
+demo: tools surreal explorer build-dar sandbox setup sync
     @just purchase 1 {{guided_pause}}
     @just purchase 2
 

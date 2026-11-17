@@ -9,10 +9,10 @@ publish = false
 # The Ledger API client crates come from canton-event-graph-syncer, pinned to
 # the same commit as the syncer the justfile installs (SYNCER_REV).
 [dependencies]
-client = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "9f25cb06ccf43af23b2f41bcad0355f17567d7db" }
-ledger-api = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "9f25cb06ccf43af23b2f41bcad0355f17567d7db" }
-daml-type-rep = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "9f25cb06ccf43af23b2f41bcad0355f17567d7db" }
-derive-lapi-access = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "9f25cb06ccf43af23b2f41bcad0355f17567d7db" }
+client = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "6f9084a91f53ed3ecdce6f08d5b213cef787efb0" }
+ledger-api = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "6f9084a91f53ed3ecdce6f08d5b213cef787efb0" }
+daml-type-rep = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "6f9084a91f53ed3ecdce6f08d5b213cef787efb0" }
+derive-lapi-access = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "6f9084a91f53ed3ecdce6f08d5b213cef787efb0" }
 anyhow = "1.0.98"
 clap = { version = "4.5.40", features = ["derive"] }
 serde = { version = "1.0.219", features = ["derive"] }

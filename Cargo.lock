@@ -353,7 +353,7 @@ checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=9f25cb06ccf43af23b2f41bcad0355f17567d7db#9f25cb06ccf43af23b2f41bcad0355f17567d7db"
+source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=6f9084a91f53ed3ecdce6f08d5b213cef787efb0#6f9084a91f53ed3ecdce6f08d5b213cef787efb0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -364,6 +364,7 @@ dependencies = [
  "futures-util",
  "ledger-api",
  "nix",
+ "prost",
  "prost-types",
  "regex",
  "reqwest",
@@ -455,7 +456,7 @@ dependencies = [
 [[package]]
 name = "daml-type-rep"
 version = "0.1.0"
-source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=9f25cb06ccf43af23b2f41bcad0355f17567d7db#9f25cb06ccf43af23b2f41bcad0355f17567d7db"
+source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=6f9084a91f53ed3ecdce6f08d5b213cef787efb0#6f9084a91f53ed3ecdce6f08d5b213cef787efb0"
 dependencies = [
  "chrono",
  "ledger-api",
@@ -478,7 +479,7 @@ checksum = "9e9de72ce2ad1f90dc62fa25f0f430ef85eb4b0d8fa0be4f30373bc40a21d28e"
 [[package]]
 name = "derive-lapi-access"
 version = "0.1.0"
-source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=9f25cb06ccf43af23b2f41bcad0355f17567d7db#9f25cb06ccf43af23b2f41bcad0355f17567d7db"
+source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=6f9084a91f53ed3ecdce6f08d5b213cef787efb0#6f9084a91f53ed3ecdce6f08d5b213cef787efb0"
 dependencies = [
  "daml-type-rep",
  "ledger-api",
@@ -1131,7 +1132,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 [[package]]
 name = "ledger-api"
 version = "0.1.0"
-source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=9f25cb06ccf43af23b2f41bcad0355f17567d7db#9f25cb06ccf43af23b2f41bcad0355f17567d7db"
+source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=6f9084a91f53ed3ecdce6f08d5b213cef787efb0#6f9084a91f53ed3ecdce6f08d5b213cef787efb0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
