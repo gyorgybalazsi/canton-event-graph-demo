@@ -22,6 +22,8 @@ canton_transactions = 50
 # Transactions drawn side by side; a wider graph scrolls. Three fit the three
 # transactions of one ticket purchase.
 canton_columns = 3
+# Scroll to each new transaction as it arrives.
+canton_follow_newest = true
 connect_results = true
 
 [logging]

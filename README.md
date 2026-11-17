@@ -66,13 +66,14 @@ just demo
 The first run builds the three tools into `.demo/bin`, which takes a few
 minutes. Then it prints one line per step:
 
-1. builds the DAR (`just build-dar`);
-2. starts the sandbox and an in-memory SurrealDB server in the background, and
-   creates the syncer's database user (`just sandbox`, `just surreal`);
-3. uploads the DAR and allocates Alice, TicketWizard and ScroogeBank
+1. starts an in-memory SurrealDB server in the background and creates the
+   syncer's database user (`just surreal`);
+2. opens the explorer on the still empty graph (`just explorer`);
+3. builds the DAR and starts the sandbox in the background (`just build-dar`,
+   `just sandbox`);
+4. uploads the DAR and allocates Alice, TicketWizard and ScroogeBank
    (`just setup`);
-4. starts the syncer (`just sync`);
-5. opens the explorer on the still empty graph (`just explorer`);
+5. starts the syncer (`just sync`);
 6. buys one ticket step by step, waiting 4 seconds after each of its three
    transactions so you can watch each one arrive (`DEMO_PAUSE` changes the
    wait), then buys two more at full speed.
