@@ -109,6 +109,7 @@ data in memory, so the next `just demo` starts from an empty ledger.
 | `just sync` | Starts the syncer, which follows every party on the sandbox |
 | `just explorer` | Opens the explorer in the background |
 | `just purchase [count] [pause]` | Buys `count` tickets (default 3), waiting `pause` seconds after each transaction (default 0) |
+| `just explorer-restart` | Restarts only the explorer, for example after installing a new build with `just tools`; the sandbox, SurrealDB and the syncer keep running |
 | `just explorer-limit [n]` | Reopens the explorer showing only the latest `n` transactions (default 5) |
 | `just tickets` | Lists each ticket agreement with the price paid for it, found by walking from the agreement to the `Accept` choice and its offer |
 | `just show <offset>` | Prints the events of the transaction at `offset` in node order: each created contract's arguments and signatories, and each exercised choice's argument and acting parties (needs `jq`) |
