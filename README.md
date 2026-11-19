@@ -89,8 +89,9 @@ just status            # what runs, and how much the syncer has written
 ```
 
 In the explorer, open **▸ Query** under the graph and pick **Ticket purchase
-demo query** from **Saved queries…**, then press **Run**: the Table tab lists
-each accepted offer with its buyer and price, like `just tickets`.
+demo query** from **Choose a saved query…**, then press **Run**: the table under
+the query lists each accepted offer with its buyer and price, like
+`just tickets`.
 
 `just stop` stops everything, including the explorer. `just demo-reset` also
 deletes the demo's logs and settings; the sandbox and SurrealDB keep their
