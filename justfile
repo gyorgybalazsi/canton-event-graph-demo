@@ -122,6 +122,11 @@ explorer:
     @"{{svc}}" start explorer "{{demo}}/explorer" "{{bin}}/surrealdb-explorer"
     @sleep 3
 
+# Restart only the explorer (to pick up a newly installed build); the rest keeps running
+explorer-restart:
+    @"{{svc}}" stop explorer > /dev/null
+    @just explorer
+
 # Show only the latest `n` transactions in the explorer (reopens it)
 explorer-limit n="5":
     @echo "▶ Showing only the latest {{n}} transactions in the explorer"
