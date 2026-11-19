@@ -11,7 +11,7 @@ syncer_rev := "129c64263a7e8ee8fd969421cf8b7bdf2e2bbe49"
 codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
 codegen_rev := "308c6bd279787c3697f051c18ba2e47a2f547bc3"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
-explorer_rev := "efc225183096bbd7672a047f83d3c56a22deb25e"
+explorer_rev := "89ef8960b46b8c956d663959f096e18fe7d36cec"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead (needed while that repository is private).
 explorer_path := env("EXPLORER_PATH", "")
