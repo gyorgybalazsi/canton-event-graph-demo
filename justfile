@@ -7,7 +7,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 # Bump a rev to try a newer version (and the `client`/`ledger-api` revs in
 # app/Cargo.toml together with SYNCER_REV).
 syncer_git := "https://github.com/gyorgybalazsi/canton-event-graph-syncer"
-syncer_rev := "6f9084a91f53ed3ecdce6f08d5b213cef787efb0"
+syncer_rev := "129c64263a7e8ee8fd969421cf8b7bdf2e2bbe49"
 codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
 codegen_rev := "308c6bd279787c3697f051c18ba2e47a2f547bc3"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
