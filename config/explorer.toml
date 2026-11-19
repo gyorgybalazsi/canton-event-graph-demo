@@ -3,7 +3,6 @@
 # The address is replaced with the demo's SurrealDB server.
 
 [database]
-connection = "server"
 server = "ws://127.0.0.1:8001"
 # The demo's in-memory SurrealDB server only listens on 127.0.0.1 and holds
 # nothing but demo data, so it uses a fixed root password.

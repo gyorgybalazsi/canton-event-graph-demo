@@ -88,6 +88,10 @@ just show 25           # the events of one transaction: payloads and choice argu
 just status            # what runs, and how much the syncer has written
 ```
 
+In the explorer, open **▸ Query** under the graph and pick **Ticket purchase
+demo query** from **Saved queries…**, then press **Run**: the Table tab lists
+each accepted offer with its buyer and price, like `just tickets`.
+
 `just stop` stops everything, including the explorer. `just demo-reset` also
 deletes the demo's logs and settings; the sandbox and SurrealDB keep their
 data in memory, so the next `just demo` starts from an empty ledger.
