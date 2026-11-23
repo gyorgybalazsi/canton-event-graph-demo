@@ -12,6 +12,11 @@ codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
 codegen_tag := "v0.1.0"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
 explorer_tag := "v0.1.0"
+# The analytics daemon and a dashboard-enabled explorer for the `analytics`
+# recipes. Pinned to commits on main until the analytics module gets a release
+# tag; bump `rev` in analytics/bench/Cargo.toml together with analytics_rev.
+analytics_rev := "13c68e0"
+explorer_dashboard_rev := "d4d17ff"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead of GitHub (for example to try local changes).
 explorer_path := env("EXPLORER_PATH", "")
@@ -20,6 +25,10 @@ demo := justfile_directory() / ".demo"
 bin := demo / "bin"
 svc := justfile_directory() / "scripts/demo.sh"
 dar := justfile_directory() / "daml/.daml/dist/ticket-purchase-0.1.0.dar"
+
+analytics := demo / "analytics"
+analytics_bin := analytics / "bin"
+plugins := analytics / "plugins"
 
 ledger_port := "6865"
 # Not 8000, so the demo doesn't collide with a SurrealDB server you already run.
@@ -163,14 +172,16 @@ status:
         done; \
     fi
 
-# Stop the explorer, the syncer, SurrealDB and the sandbox
+# Stop the analytics daemon and dashboard, the explorer, the syncer, SurrealDB and the sandbox
 stop:
+    @"{{svc}}" stop dashboard
+    @"{{svc}}" stop analytics
     @"{{svc}}" stop explorer
     @"{{svc}}" stop syncer
     @"{{svc}}" stop surreal
     @"{{svc}}" stop sandbox
 
-# Follow a service's log: sandbox, surreal, syncer or explorer
+# Follow a service's log: sandbox, surreal, syncer, explorer, analytics or dashboard
 logs name="syncer":
     tail -f "{{demo}}/logs/{{name}}.log"
 
@@ -180,3 +191,55 @@ _sql query:
         --data-binary "{{query}}" {{surreal_http}}/sql); \
     if echo "$out" | grep -q '"status":"ERR"'; then echo "$out" >&2; exit 1; fi; \
     echo "$out"
+
+# --- Analytics: the canton-analytics daemon and the explorer's dashboard ---
+
+# Install canton-analytics and a dashboard-enabled explorer into .demo/analytics/bin (skips what is already installed)
+analytics-tools:
+    @echo "▶ Installing canton-analytics and the explorer with its dashboard (pinned commits)"
+    @mkdir -p "{{analytics_bin}}"
+    @{{installed}} "canton-analytics .*#{{analytics_rev}}" "{{analytics}}/.crates.toml" || \
+        cargo install --quiet --locked --root "{{analytics}}" --git {{syncer_git}} --rev {{analytics_rev}} canton-analytics 2>&1 | {{quiet}}
+    @{{installed}} "surrealdb-explorer .*#{{explorer_dashboard_rev}}" "{{analytics}}/.crates.toml" || \
+        cargo install --quiet --locked --root "{{analytics}}" --git {{explorer_git}} --rev {{explorer_dashboard_rev}} \
+            --features dashboard surrealdb-explorer 2>&1 | {{quiet}}
+
+# Build the ticket analytics plugins (WebAssembly) into .demo/analytics/plugins
+analytics-plugins:
+    @echo "▶ Building the ticket analytics plugins"
+    @rustup target add wasm32-wasip2 2>&1 | {{quiet}}
+    @mkdir -p "{{plugins}}"
+    @for p in ticket-agreements ticket-value-by-offset; do \
+        (cd analytics/plugins/$p && cargo build --quiet --locked --release --target wasm32-wasip2 --target-dir target) \
+        && cp analytics/plugins/$p/target/wasm32-wasip2/release/${p//-/_}.wasm "{{plugins}}/"; \
+    done
+
+# Run the analytics daemon on the demo's SurrealDB in the background, then open the dashboard (start the demo first)
+analytics: analytics-tools analytics-plugins
+    @echo "▶ Starting canton-analytics: SurrealDB → Delta tables in .demo/analytics/tables"
+    @just _sql "USE NS canton DB ticket_purchase; \
+        DEFINE USER IF NOT EXISTS analytics ON DATABASE PASSWORD 'analytics' ROLES VIEWER;" > /dev/null
+    @SURREAL_URL=ws://127.0.0.1:{{surreal_port}} SURREAL_NAMESPACE=canton SURREAL_DATABASE=ticket_purchase \
+        SURREAL_USER=analytics SURREAL_PASSWORD=analytics \
+        "{{svc}}" start analytics "{{analytics}}" "{{analytics_bin}}/canton-analytics" run \
+            --plugins-dir "{{plugins}}" --tables "{{analytics}}/tables" --max-wait 2
+    @"{{svc}}" wait-log analytics "plugin ready" 60
+    @just analytics-dashboard
+
+# Open the dashboard-enabled explorer on a tables folder (default: the daemon's), in the background
+analytics-dashboard tables=(analytics / "tables"):
+    @echo "▶ Opening the explorer on {{tables}} (Dashboard tab; the Graph tab shows the demo's ledger)"
+    @"{{svc}}" stop dashboard > /dev/null
+    @mkdir -p "{{analytics}}/explorer" "{{tables}}"
+    @# Without the demo's SurrealDB running (say, for the benchmark's tables), no database: it opens on the dashboard.
+    @if "{{svc}}" listening {{surreal_port}}; then server=ws://127.0.0.1:{{surreal_port}}; else server=; fi; \
+        sed "s#ws://127.0.0.1:8001#$server#" config/explorer.toml > "{{analytics}}/explorer/config.toml"
+    @printf '\n[analytics]\nlocation = "%s"\n' "$(cd "{{tables}}" && pwd)" >> "{{analytics}}/explorer/config.toml"
+    @"{{svc}}" start dashboard "{{analytics}}/explorer" "{{analytics_bin}}/surrealdb-explorer"
+
+# Benchmark: write the ticket plugins' tables for a made-up ledger (default 10 million offsets) and time their dashboards
+analytics-bench rows="10000000": analytics-plugins
+    @rm -rf "{{analytics}}/bench-tables"
+    cargo run --quiet --release -p ticket-bench -- table --tables "{{analytics}}/bench-tables" --rows {{rows}} \
+        "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value_by_offset.wasm"
+    @echo "Look at them with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-tables"

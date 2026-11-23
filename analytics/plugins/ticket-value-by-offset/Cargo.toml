@@ -1,0 +1,23 @@
+[package]
+name = "ticket-value-by-offset"
+version = "0.1.0"
+edition = "2024"
+description = "Analytics plugin: ticket agreements and their value, pre-aggregated per 10,000 offsets"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+arrow-array = { version = "59", default-features = false }
+arrow-ipc = { version = "59", default-features = false }
+arrow-schema = { version = "59", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wit-bindgen = "0.63"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

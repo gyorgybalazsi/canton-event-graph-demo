@@ -91,7 +91,7 @@ demo query** from **Choose a saved query…**, then press **Run**: the table und
 the query lists each accepted offer with its buyer and price, like
 `just tickets`.
 
-`just stop` stops everything, including the explorer. `just demo-reset` also
+`just stop` stops everything, including the explorer and the analytics daemon. `just demo-reset` also
 deletes the demo's logs and settings; the sandbox and SurrealDB keep their
 data in memory, so the next `just demo` starts from an empty ledger.
 
@@ -120,6 +120,60 @@ data in memory, so the next `just demo` starts from an empty ledger.
 The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
 (gitignored).
 
+## Analytics
+
+The [canton-analytics](https://github.com/gyorgybalazsi/canton-event-graph-syncer/tree/main/analytics)
+daemon turns the event graph into Delta Lake tables through WebAssembly
+plugins, and the explorer's **Dashboard** tab shows them. This repo has two
+plugins for the ticket model, in [`analytics/plugins`](analytics/plugins):
+
+- **ticket-agreements**: one row per accepted offer (`TicketOffer`'s `Accept`
+  choice, which creates the `TicketAgreement`): offset, time, buyer,
+  organizer and the offer's price. Its dashboard aggregates the raw rows.
+- **ticket-value-by-offset**: the same agreements pre-aggregated per 10,000
+  offsets, upserted as they come in, so its dashboard reads about 1,000 rows
+  for a 10-million-offset ledger.
+
+**Live, on the demo's ledger.** With `just demo` running:
+
+```bash
+just analytics      # starts the daemon in the background and opens the dashboard
+just purchase 20    # buy more tickets; the dashboard picks them up within seconds
+```
+
+The first run installs `canton-analytics` and an explorer built with its
+dashboard into `.demo/analytics/bin`, and needs the `wasm32-wasip2` Rust target
+(the recipe adds it). The daemon signs in as a read-only `analytics` user.
+
+**How fast over a big ledger.** `just analytics-bench` makes up a ledger of
+10 million ticket purchases, one per offset, runs it through both plugins and
+the daemon's own table writer (commits of a million offsets, then
+compaction), and times every dashboard panel. It needs no sandbox or
+SurrealDB:
+
+```bash
+just analytics-bench            # or: just analytics-bench 1000000
+just analytics-tools && just analytics-dashboard .demo/analytics/bench-tables
+```
+
+On a 4-core cloud machine it wrote the 10 million rows in about 6 s, plus
+2 s of compaction (300 MB of Parquet). The raw table's five panels, each
+aggregating all 10 million rows, took about 390 ms together; the
+pre-aggregated table's took 3 to 6 ms each. Each panel shows its query time in
+the explorer too.
+
+| Recipe | What it does |
+|---|---|
+| `just analytics` | Starts the daemon on the demo's SurrealDB (tables in `.demo/analytics/tables`) and opens the dashboard |
+| `just analytics-dashboard [tables]` | Opens the dashboard-enabled explorer on a tables folder; the Graph tab shows the demo's ledger when SurrealDB runs |
+| `just analytics-bench [rows]` | Writes the plugins' tables for a made-up ledger of `rows` offsets (default 10 million) and times their dashboards |
+| `just analytics-tools` | Installs `canton-analytics` and the dashboard-enabled explorer, pinned to commits until the analytics module is tagged |
+| `just analytics-plugins` | Builds the two plugins into `.demo/analytics/plugins` |
+
+`cargo test --release -p ticket-bench` runs both plugins over two purchases in
+the shape the syncer writes them, through the daemon, and checks the tables
+and every dashboard panel.
+
 ## Layout
 
 | Path | Contents |
@@ -127,6 +181,7 @@ The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
 | `daml/` | The Daml model, built into a DAR with `dpm build` |
 | `app/` | The Rust client. `build.rs` runs `daml-rust-codegen` on the DAR, and `src/model.rs` includes the output, so the types always match the model |
 | `config/` | The syncer's and the explorer's settings for the demo |
+| `analytics/` | The ticket analytics plugins (`plugins/`, each its own workspace built for `wasm32-wasip2`), the plugin interface they build against (`wit/`, a copy of the syncer's), and the benchmark (`bench/`) |
 | `scripts/demo.sh` | Starts, waits for and stops the background services |
 | `justfile` | The recipes, and the pinned tags of the tools |
 
