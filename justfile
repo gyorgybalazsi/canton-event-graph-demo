@@ -3,15 +3,15 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# The tools come from their own repositories, pinned to known-good commits.
-# Bump a rev to try a newer version (and the `client`/`ledger-api` revs in
-# app/Cargo.toml together with SYNCER_REV).
+# The tools come from their own repositories, pinned to their release tags.
+# Bump a tag to try a newer version (and the `client`/`ledger-api` tags in
+# app/Cargo.toml together with syncer_tag).
 syncer_git := "https://github.com/gyorgybalazsi/canton-event-graph-syncer"
-syncer_rev := "129c64263a7e8ee8fd969421cf8b7bdf2e2bbe49"
+syncer_tag := "v0.1.0"
 codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
-codegen_rev := "308c6bd279787c3697f051c18ba2e47a2f547bc3"
+codegen_tag := "v0.1.0"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
-explorer_rev := "89ef8960b46b8c956d663959f096e18fe7d36cec"
+explorer_tag := "v0.1.0"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead (needed while that repository is private).
 explorer_path := env("EXPLORER_PATH", "")
@@ -33,7 +33,7 @@ guided_pause := env("DEMO_PAUSE", "4")
 # Hides cargo's "already installed" and toolchain notes; real errors still show.
 quiet := "{ grep -v -e 'Ignored package' -e 'is already installed' -e 'toolchain' -e '^$' >&2 || true; }"
 # Whether cargo's install record in .demo matches a pattern (a tool at the pinned
-# rev, or the explorer installed from a local clone, is not fetched again).
+# tag, or the explorer installed from a local clone, is not fetched again).
 installed := "grep -qsE"
 # Prints the last statement's rows, one per line (as JSON without jq).
 
@@ -57,14 +57,14 @@ demo-reset: stop
 tools:
     @echo "▶ Installing syncer, daml-rust-codegen and surrealdb-explorer (pinned versions)"
     @mkdir -p "{{bin}}"
-    @{{installed}} "syncer .*rev={{syncer_rev}}" "{{demo}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --rev {{syncer_rev}} syncer 2>&1 | {{quiet}}
-    @{{installed}} "daml-rust-codegen .*rev={{codegen_rev}}" "{{demo}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --rev {{codegen_rev}} daml-rust-codegen 2>&1 | {{quiet}}
+    @{{installed}} "syncer .*tag={{syncer_tag}}" "{{demo}}/.crates.toml" || \
+        cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --tag {{syncer_tag}} syncer 2>&1 | {{quiet}}
+    @{{installed}} "daml-rust-codegen .*tag={{codegen_tag}}" "{{demo}}/.crates.toml" || \
+        cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --tag {{codegen_tag}} daml-rust-codegen 2>&1 | {{quiet}}
     @if [[ -n "{{explorer_path}}" ]]; then \
         cargo install --quiet --locked --force --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
-    elif ! {{installed}} "surrealdb-explorer .*(rev={{explorer_rev}}|path\+)" "{{demo}}/.crates.toml"; then \
-        CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --rev {{explorer_rev}} surrealdb-explorer 2>&1 | {{quiet}} \
+    elif ! {{installed}} "surrealdb-explorer .*(tag={{explorer_tag}}|path\+)" "{{demo}}/.crates.toml"; then \
+        CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --tag {{explorer_tag}} surrealdb-explorer 2>&1 | {{quiet}} \
         || { echo "error: could not install surrealdb-explorer from GitHub (the repository may be private)." >&2; \
              echo "Install it from a local clone instead: EXPLORER_PATH=/path/to/surrealdb-explorer just tools" >&2; exit 1; }; \
     fi
