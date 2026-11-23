@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The README no longer calls surrealdb-explorer private: all three tools install
+  from their public repositories. `EXPLORER_PATH` stays, for trying a local
+  clone of the explorer.
+
 ## [0.1.0] - 2026-11-23
 
 The first release of the end-to-end demo: a Canton sandbox, a Rust ticket

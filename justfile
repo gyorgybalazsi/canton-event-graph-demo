@@ -13,7 +13,7 @@ codegen_tag := "v0.1.0"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
 explorer_tag := "v0.1.0"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
-# instead (needed while that repository is private).
+# instead of GitHub (for example to try local changes).
 explorer_path := env("EXPLORER_PATH", "")
 
 demo := justfile_directory() / ".demo"
@@ -64,9 +64,7 @@ tools:
     @if [[ -n "{{explorer_path}}" ]]; then \
         cargo install --quiet --locked --force --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
     elif ! {{installed}} "surrealdb-explorer .*(tag={{explorer_tag}}|path\+)" "{{demo}}/.crates.toml"; then \
-        CARGO_NET_GIT_FETCH_WITH_CLI=true cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --tag {{explorer_tag}} surrealdb-explorer 2>&1 | {{quiet}} \
-        || { echo "error: could not install surrealdb-explorer from GitHub (the repository may be private)." >&2; \
-             echo "Install it from a local clone instead: EXPLORER_PATH=/path/to/surrealdb-explorer just tools" >&2; exit 1; }; \
+        cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --tag {{explorer_tag}} surrealdb-explorer 2>&1 | {{quiet}}; \
     fi
 
 # Build the ticket purchase DAR (needs the Daml SDK's dpm)
