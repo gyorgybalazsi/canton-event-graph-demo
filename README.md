@@ -16,7 +16,7 @@ as a graph.
                                   SurrealDB ──────▶ surrealdb-explorer
 ```
 
-The pieces come from their own repositories and are pinned to known commits,
+The pieces come from their own repositories and are pinned to their release tags,
 not copied:
 
 | Piece | Repository | Used for |
@@ -51,7 +51,7 @@ the `TicketAgreement`.
 - **curl**, and git access to the three repositories above. surrealdb-explorer
   is private for now: without access to it, install it from a local clone with
   `EXPLORER_PATH=~/surrealdb-explorer just tools` (the clone should be at the
-  commit pinned in the `justfile`; `just tools` rebuilds it from the clone each time), then run `just demo`
+  tag pinned in the `justfile`; `just tools` rebuilds it from the clone each time), then run `just demo`
 
 Ports 6865–6869 (sandbox) and 8001 (SurrealDB) must be free. The demo uses
 8001 rather than SurrealDB's usual 8000 so it doesn't collide with a server
@@ -102,7 +102,7 @@ data in memory, so the next `just demo` starts from an empty ledger.
 | Recipe | What it does |
 |---|---|
 | `just demo` | Everything below, in order, with one guided purchase and two more |
-| `just tools` | Installs `syncer`, `daml-rust-codegen` and `surrealdb-explorer` into `.demo/bin` at the pinned commits, skipping what is already installed (an explorer installed from a local clone counts) |
+| `just tools` | Installs `syncer`, `daml-rust-codegen` and `surrealdb-explorer` into `.demo/bin` at the pinned tags, skipping what is already installed (an explorer installed from a local clone counts) |
 | `just build-dar` | Builds `daml/.daml/dist/ticket-purchase-0.1.0.dar` |
 | `just sandbox` | Starts the Canton sandbox and waits until it is ready |
 | `just surreal` | Starts SurrealDB in memory and creates the `canton` namespace, the `ticket_purchase` database and the `syncer` user |
@@ -130,7 +130,7 @@ The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
 | `app/` | The Rust client. `build.rs` runs `daml-rust-codegen` on the DAR, and `src/model.rs` includes the output, so the types always match the model |
 | `config/` | The syncer's and the explorer's settings for the demo |
 | `scripts/demo.sh` | Starts, waits for and stops the background services |
-| `justfile` | The recipes, and the pinned commits of the tools |
+| `justfile` | The recipes, and the pinned tags of the tools |
 
 ## Changing things
 
@@ -138,9 +138,9 @@ The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
   build of the app regenerates its types. If you rename a template or choice,
   the app stops compiling where it uses it, which is the point of generating
   the types.
-- **Tool versions.** The commits are at the top of the `justfile`. The app's
+- **Tool versions.** The release tags are at the top of the `justfile`. The app's
   ledger crates in `app/Cargo.toml` are pinned to the same
-  canton-event-graph-syncer commit as the syncer; bump them together.
+  canton-event-graph-syncer tag as the syncer; bump them together.
 - **The explorer from a local clone.** `EXPLORER_PATH=~/surrealdb-explorer just tools`
   installs it from your clone instead of GitHub.
 - **Building the app without the Daml SDK.** Point `TICKET_PURCHASE_GENERATED`
