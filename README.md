@@ -48,10 +48,8 @@ the `TicketAgreement`.
 - **Daml SDK 3.7.1** with `dpm` (`dpm install 3.7.1`), for the DAR and the sandbox
 - **[SurrealDB](https://surrealdb.com/install) 4.x**, the `surreal` program
 - **[just](https://github.com/casey/just)** (`brew install just`)
-- **curl**, and git access to the three repositories above. surrealdb-explorer
-  is private for now: without access to it, install it from a local clone with
-  `EXPLORER_PATH=~/surrealdb-explorer just tools` (the clone should be at the
-  tag pinned in the `justfile`; `just tools` rebuilds it from the clone each time), then run `just demo`
+- **curl**, and network access to GitHub: `just tools` installs the three tools
+  from their public repositories above
 
 Ports 6865–6869 (sandbox) and 8001 (SurrealDB) must be free. The demo uses
 8001 rather than SurrealDB's usual 8000 so it doesn't collide with a server
@@ -142,7 +140,8 @@ The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
   ledger crates in `app/Cargo.toml` are pinned to the same
   canton-event-graph-syncer tag as the syncer; bump them together.
 - **The explorer from a local clone.** `EXPLORER_PATH=~/surrealdb-explorer just tools`
-  installs it from your clone instead of GitHub.
+  installs it from your clone instead of GitHub, for example to try local
+  changes. `just tools` rebuilds it from the clone each time.
 - **Building the app without the Daml SDK.** Point `TICKET_PURCHASE_GENERATED`
   at an already generated file, or `TICKET_PURCHASE_DAR` / `DAML_RUST_CODEGEN`
   at another DAR or codegen program (see `app/build.rs`).
