@@ -88,7 +88,7 @@ surreal:
     @if "{{svc}}" listening {{surreal_port}} && [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then \
         echo "error: something else already listens on port {{surreal_port}}; set DEMO_SURREAL_PORT" >&2; exit 1; \
     fi
-    @"{{svc}}" start surreal . surreal start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
+    @"{{svc}}" start surreal . surreal db start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
     @"{{svc}}" wait-http surreal {{surreal_http}}/health 30
     @just _sql "DEFINE NAMESPACE IF NOT EXISTS canton; USE NS canton; \
         DEFINE DATABASE IF NOT EXISTS ticket_purchase; USE DB ticket_purchase; \
