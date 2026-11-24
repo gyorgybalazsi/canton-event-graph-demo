@@ -8,7 +8,7 @@ publish = false
 
 # The analytics daemon and reader come from canton-event-graph-syncer. They
 # are pinned to a commit on its main branch until the analytics module gets a
-# release tag; bump `rev` here and `syncer_analytics_rev` in the justfile
+# release tag; bump `rev` here and `analytics_rev` in the justfile
 # together.
 [dependencies]
 canton-analytics = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "615c8e6", default-features = false }

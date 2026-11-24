@@ -236,7 +236,7 @@ impl Guest for Plugin {
             panel(
                 "Agreement value per offset range",
                 PanelKind::Timeseries,
-                "SELECT offset_bucket - offset_bucket % {bucket} AS \"offset\", sum(value) AS value \
+                "SELECT offset_bucket - offset_bucket % {bucket} AS offset_bucket, sum(value) AS value \
                  FROM ticket_value_by_offset GROUP BY 1 ORDER BY 1",
                 Some("offset_bucket"),
                 &[],
