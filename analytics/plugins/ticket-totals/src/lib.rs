@@ -1,5 +1,5 @@
-//! Ticket agreements per day, for a chart of the running total at the end of
-//! each day or week.
+//! Ticket agreements per day, for a column chart of each day's or week's
+//! new agreements.
 //!
 //! Both ticket plugins read the same rows: each accepted ticket offer (the
 //! `TicketOffer` template's `Accept` choice, which creates the
@@ -88,10 +88,10 @@ impl Spec {
     pub fn description(&self) -> &'static str {
         match self.measure {
             Measure::Agreements => {
-                "Ticket agreements to date, at the end of each day or week (UTC)."
+                "New ticket agreements each day or week (UTC)."
             }
             Measure::Value => {
-                "Total value of the ticket agreements to date, at the end of each day or week (UTC)."
+                "Total value of the new ticket agreements each day or week (UTC)."
             }
         }
     }
@@ -99,20 +99,18 @@ impl Spec {
     /// The dashboard's one chart.
     pub fn chart_title(&self) -> &'static str {
         match self.measure {
-            Measure::Agreements => "Ticket agreements to date",
-            Measure::Value => "Ticket agreement value to date",
+            Measure::Agreements => "New ticket agreements",
+            Measure::Value => "Value of new ticket agreements",
         }
     }
 
-    /// Each day's or week's agreements, then their running total. The
-    /// reader fills `{period}` from the dashboard's Day / Week switch; weeks
-    /// start on Monday (2001-01-01 was one).
+    /// Each day's or week's amount, one column per period. The reader
+    /// fills `{period}` from the dashboard's Day / Week switch; weeks start
+    /// on Monday (2001-01-01 was one), as ISO weeks do.
     pub fn chart_sql(&self) -> String {
         format!(
-            "SELECT period_start, sum(n) OVER (ORDER BY period_start) AS \"{m}\" \
-             FROM (SELECT date_bin({{period}}, {DAY}, TIMESTAMP '2001-01-01T00:00:00Z') AS period_start, \
-                   sum({m}) AS n FROM {t} GROUP BY 1) \
-             ORDER BY period_start",
+            "SELECT date_bin({{period}}, {DAY}, TIMESTAMP '2001-01-01T00:00:00Z') AS period_start, \
+             sum({m}) AS \"{m}\" FROM {t} GROUP BY 1 ORDER BY 1",
             m = self.measure.column(),
             t = self.name.replace('-', "_"),
         )

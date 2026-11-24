@@ -124,7 +124,7 @@ fn ticket_plugins_read_the_syncers_purchases() {
                     ["1793577600000000"],
                     "{table}: 2026-11-02T00:00Z"
                 );
-                // One chart: the running total, by day.
+                // One chart: a column per day (or week) with its amount.
                 let board = dashboard::load(&session).await.unwrap();
                 assert_eq!(board.panels.len(), 1);
                 let chart = board.panels[0].frame.as_ref().unwrap();

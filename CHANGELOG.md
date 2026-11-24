@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Analytics: two canton-analytics plugins for the ticket model,
-  `ticket-agreements` and `ticket-value`, each a chart of the running total
-  at the end of each day or week (the dashboard's Day / Week switch);
-  `just analytics` runs the daemon on the demo's ledger next to the
-  explorer's dashboard, and `just analytics-bench` times it over a made-up
-  10-million-offset ledger.
+  `ticket-agreements` and `ticket-value`, each a column chart of the new
+  agreements (or their value) per day or per ISO week (the dashboard's
+  Day / Week switch); `just analytics` runs the daemon on the demo's ledger
+  next to the explorer's dashboard, and `just analytics-bench` times it over
+  a made-up year of 10 million purchases that vary by weekday and season.
 
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved

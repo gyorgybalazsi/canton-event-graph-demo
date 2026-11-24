@@ -49,10 +49,11 @@ enum Command {
 
 /// Offsets per commit.
 const CHUNK: i64 = 1_000_000;
-/// 2026-01-01T00:00:00Z, in microseconds.
+/// 2026-01-01T00:00:00Z, in microseconds: a Thursday.
 const START: i64 = 1_767_225_600_000_000;
-/// One offset every 3 seconds: 10 million offsets span about a year.
-const STEP: i64 = 3_000_000;
+/// The made-up ledger spans a year, however many offsets it has.
+const DAYS: usize = 365;
+const DAY_MICROS: i64 = 86_400_000_000;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -78,6 +79,7 @@ async fn table(tables: &str, rows: i64, plugins: &[PathBuf]) -> Result<()> {
     ensure!(rows > 0, "--rows must be at least 1");
     let tables = Location::parse(tables, HashMap::new())?;
     let engine = plugin::engine()?;
+    let calendar = Calendar::new(rows);
     for path in plugins {
         let mut plugin = tokio::task::block_in_place(|| Plugin::load(&engine, path))
             .with_context(|| format!("could not load {}", path.display()))?;
@@ -97,7 +99,7 @@ async fn table(tables: &str, rows: i64, plugins: &[PathBuf]) -> Result<()> {
         let mut from = 0;
         while from < rows {
             let to = rows.min(from + CHUNK);
-            let batch = agreements(from + 1, to, input.clone())?;
+            let batch = agreements(&calendar, from + 1, to, input.clone())?;
             let out = tokio::task::block_in_place(|| plugin.transform(&[batch]))?;
             // Save the state with the last commit, as the daemon does.
             let state = if to == rows {
@@ -157,12 +159,68 @@ fn mix(n: i64, salt: u64) -> u64 {
     x ^ (x >> 31)
 }
 
+/// How busy each day of the made-up year is, relative to an average day:
+/// weekends sell more, summer and December are high season, the business
+/// grows through the year, every day is a bit off, and now and then a big
+/// event goes on sale.
+fn busyness(day: usize) -> f64 {
+    // START is a Thursday; Monday is 0.
+    let weekday = (day + 3) % 7;
+    let week = [0.75, 0.8, 0.85, 1.0, 1.35, 1.6, 1.1][weekday];
+    let year = day as f64 / DAYS as f64;
+    let summer = 0.3 * (-((year - 0.55) / 0.12).powi(2)).exp();
+    let december = 0.4 * (-((year - 0.95) / 0.03).powi(2)).exp();
+    let growth = 0.7 + 0.6 * year;
+    let noise = 0.75 + (mix(day as i64, 7) % 500) as f64 / 1_000.0;
+    let on_sale = if mix(day as i64, 8) % 23 == 0 { 2.5 } else { 1.0 };
+    week * (1.0 + summer + december) * growth * noise * on_sale
+}
+
+/// How much dearer than usual a day's tickets are: big events cost more.
+fn price_level(day: usize) -> f64 {
+    let level = 0.8 + (mix(day as i64, 9) % 400) as f64 / 1_000.0;
+    if mix(day as i64, 8) % 23 == 0 { level * 1.5 } else { level }
+}
+
+/// Which day each offset falls on: `ends[d]` is the last offset of day `d`.
+struct Calendar {
+    ends: Vec<i64>,
+}
+
+impl Calendar {
+    /// Spreads `rows` offsets over the year by each day's busyness.
+    fn new(rows: i64) -> Calendar {
+        let weights: Vec<f64> = (0..DAYS).map(busyness).collect();
+        let total: f64 = weights.iter().sum();
+        let mut sum = 0.0;
+        let ends = weights
+            .iter()
+            .map(|w| {
+                sum += w;
+                (rows as f64 * sum / total).round() as i64
+            })
+            .collect::<Vec<_>>();
+        Calendar { ends }
+    }
+
+    /// Offset `o`'s day, and its time: the day's offsets are spread evenly
+    /// over the day.
+    fn place(&self, o: i64) -> (usize, i64) {
+        let day = self.ends.partition_point(|&end| end < o).min(DAYS - 1);
+        let first = if day == 0 { 1 } else { self.ends[day - 1] + 1 };
+        let count = (self.ends[day] - first + 1).max(1);
+        let at = START + day as i64 * DAY_MICROS + (o - first) * DAY_MICROS / count;
+        (day, at)
+    }
+}
+
 /// The accepted offers at offsets `first..=last`, one per offset, in the
 /// columns the plugins' query returns: 50,000 buyers, 50 organizers, prices
-/// from 20 to 300.
-fn agreements(first: i64, last: i64, schema: SchemaRef) -> Result<RecordBatch> {
+/// from 20 to 300 times the day's price level.
+fn agreements(calendar: &Calendar, first: i64, last: i64, schema: SchemaRef) -> Result<RecordBatch> {
     let offsets: Vec<i64> = (first..=last).collect();
-    let at: Vec<i64> = offsets.iter().map(|o| START + o * STEP).collect();
+    let placed: Vec<(usize, i64)> = offsets.iter().map(|&o| calendar.place(o)).collect();
+    let at: Vec<i64> = placed.iter().map(|&(_, at)| at).collect();
     let buyer: Vec<String> = offsets
         .iter()
         .map(|&o| format!("Buyer{}::1220aa", mix(o, 1) % 50_000))
@@ -173,7 +231,11 @@ fn agreements(first: i64, last: i64, schema: SchemaRef) -> Result<RecordBatch> {
         .collect();
     let price: Vec<f64> = offsets
         .iter()
-        .map(|&o| 20.0 + (mix(o, 3) % 2_800) as f64 / 10.0)
+        .zip(&placed)
+        .map(|(&o, &(day, _))| {
+            let base = 20.0 + (mix(o, 3) % 2_800) as f64 / 10.0;
+            (base * price_level(day) * 100.0).round() / 100.0
+        })
         .collect();
     let columns: Vec<ArrayRef> = vec![
         Arc::new(Int64Array::from(offsets)),
@@ -183,4 +245,32 @@ fn agreements(first: i64, last: i64, schema: SchemaRef) -> Result<RecordBatch> {
         Arc::new(Float64Array::from(price)),
     ];
     Ok(RecordBatch::try_new(schema, columns)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Calendar, DAY_MICROS, DAYS, START};
+
+    #[test]
+    fn every_offset_lands_on_its_day_in_order() {
+        let rows = 100_000;
+        let calendar = Calendar::new(rows);
+        assert_eq!(*calendar.ends.last().unwrap(), rows);
+        let mut last = i64::MIN;
+        for o in 1..=rows {
+            let (day, at) = calendar.place(o);
+            assert!(at > last, "offset {o} goes back in time");
+            assert_eq!((at - START) / DAY_MICROS, day as i64);
+            last = at;
+        }
+        assert!(calendar.place(rows).0 == DAYS - 1);
+    }
+
+    #[test]
+    fn days_differ() {
+        let calendar = Calendar::new(10_000_000);
+        let counts: Vec<i64> = calendar.ends.windows(2).map(|w| w[1] - w[0]).collect();
+        let (lo, hi) = (counts.iter().min().unwrap(), counts.iter().max().unwrap());
+        assert!(*hi > 3 * lo, "quietest day {lo}, busiest {hi}");
+    }
 }

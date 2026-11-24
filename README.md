@@ -129,12 +129,13 @@ daemon turns the event graph into Delta Lake tables through WebAssembly
 plugins, and the explorer's **Dashboard** tab shows them. This repo has two
 plugins for the ticket model, in [`analytics/plugins`](analytics/plugins).
 Each counts the accepted offers (`TicketOffer`'s `Accept` choice, which
-creates the `TicketAgreement`) per day, and its dashboard is one chart of the
-running total at the end of each day or week, picked with the dashboard's
-**Per Day | Week** switch (weeks run Monday to Sunday, UTC):
+creates the `TicketAgreement`) per day, and its dashboard is one column
+chart with a column per day or per week, picked with the dashboard's
+**Per Day | Week** switch. Weeks are ISO weeks (Monday to Sunday, UTC) and
+are labelled by week number, such as `W48`:
 
-- **ticket-agreements**: how many ticket agreements there are to date.
-- **ticket-value**: their total value to date, from each offer's price.
+- **ticket-agreements**: how many new ticket agreements each day or week has.
+- **ticket-value**: their total value, from each offer's price.
 
 The tables keep one row per day, upserted as agreements come in, so a chart
 reads a few hundred rows however big the ledger gets. The shared code is in
@@ -151,11 +152,14 @@ The first run installs `canton-analytics` and an explorer built with its
 dashboard into `.demo/analytics/bin`, and needs the `wasm32-wasip2` Rust target
 (the recipe adds it). The daemon signs in as a read-only `analytics` user.
 
-**How fast over a big ledger.** `just analytics-bench` makes up a ledger of
-10 million ticket purchases, one per offset, runs it through both plugins and
+**How fast over a big ledger.** `just analytics-bench` makes up a year-long
+ledger of 10 million ticket purchases, one per offset, runs it through both plugins and
 the daemon's own table writer (commits of a million offsets, then
 compaction), and times every dashboard panel. It needs no sandbox or
-SurrealDB:
+SurrealDB. The made-up sales vary like real ones: weekends sell more than
+weekdays, summer and December are high season, sales grow through the year,
+every day is a bit off, and now and then a big event goes on sale with dearer
+tickets.
 
 ```bash
 just analytics-bench            # or: just analytics-bench 1000000
@@ -163,7 +167,7 @@ just analytics-tools && just analytics-dashboard .demo/analytics/bench-tables
 ```
 
 On a 4-core cloud machine each plugin took about 5 s for the 10 million
-offsets (a year of purchases, 348 days), and each chart then took 6 to 7 ms.
+offsets (a year of purchases), and each chart then took 6 to 7 ms.
 Each chart shows its query time in the explorer too.
 
 | Recipe | What it does |

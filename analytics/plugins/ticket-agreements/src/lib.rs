@@ -48,7 +48,7 @@ impl Guest for Plugin {
     fn dashboard() -> Vec<Panel> {
         vec![Panel {
             title: SPEC.chart_title().into(),
-            kind: PanelKind::Timeseries,
+            kind: PanelKind::Bar,
             sql: SPEC.chart_sql(),
             time_column: Some(ticket_totals::DAY.into()),
             formats: Vec::new(),
