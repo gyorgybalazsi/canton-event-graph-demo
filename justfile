@@ -59,7 +59,7 @@ demo: tools surreal explorer build-dar sandbox setup sync
 
 # Stop everything and delete the demo's data and logs (keeps the installed tools)
 demo-reset: stop
-    @rm -rf "{{demo}}/logs" "{{demo}}/run" "{{demo}}/explorer"
+    @rm -rf "{{demo}}/logs" "{{demo}}/run" "{{demo}}/explorer" "{{analytics}}/tables" "{{analytics}}/explorer"
     @echo "Reset. The sandbox and SurrealDB kept their data in memory, so it is gone too."
 
 # Install the syncer, the code generator and the explorer into .demo/bin (skips what is already installed)
@@ -97,6 +97,9 @@ surreal:
     @if "{{svc}}" listening {{surreal_port}} && [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then \
         echo "error: something else already listens on port {{surreal_port}}; set DEMO_SURREAL_PORT" >&2; exit 1; \
     fi
+    @# A fresh in-memory database starts the ledger over, so the analytics
+    @# tables made from the last one no longer match it: start them over too.
+    @if [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then rm -rf "{{analytics}}/tables"; fi
     @"{{svc}}" start surreal . surreal db start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
     @"{{svc}}" wait-http surreal {{surreal_http}}/health 30
     @just _sql "DEFINE NAMESPACE IF NOT EXISTS canton; USE NS canton; \

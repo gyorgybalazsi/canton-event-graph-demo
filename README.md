@@ -92,8 +92,10 @@ the query lists each accepted offer with its buyer and price, like
 `just tickets`.
 
 `just stop` stops everything, including the explorer and the analytics daemon. `just demo-reset` also
-deletes the demo's logs and settings; the sandbox and SurrealDB keep their
-data in memory, so the next `just demo` starts from an empty ledger.
+deletes the demo's logs, settings and analytics tables; the sandbox and
+SurrealDB keep their data in memory, so the next `just demo` starts from an
+empty ledger (and a fresh SurrealDB also clears the analytics tables, which
+were made from the old ledger).
 
 ## Recipes
 
