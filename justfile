@@ -220,6 +220,7 @@ analytics-plugins:
 # Run the analytics daemon on the demo's SurrealDB in the background, then open the dashboard (start the demo first)
 analytics: analytics-tools analytics-plugins
     @echo "▶ Starting canton-analytics: SurrealDB → Delta tables in .demo/analytics/tables"
+    @"{{svc}}" listening {{surreal_port}} || { echo "SurrealDB isn't running (nothing on port {{surreal_port}}): start the demo first with 'just demo'" >&2; exit 1; }
     @just _sql "USE NS canton DB ticket_purchase; \
         DEFINE USER IF NOT EXISTS analytics ON DATABASE PASSWORD 'analytics' ROLES VIEWER;" > /dev/null
     @SURREAL_URL=ws://127.0.0.1:{{surreal_port}} SURREAL_NAMESPACE=canton SURREAL_DATABASE=ticket_purchase \
