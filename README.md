@@ -125,14 +125,85 @@ The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
 The [canton-analytics](https://github.com/gyorgybalazsi/canton-event-graph-syncer/tree/main/analytics)
 daemon turns the event graph into Delta Lake tables through WebAssembly
 plugins, and the explorer's **Dashboard** tab shows them. This repo has two
-plugins for the ticket model, in [`analytics/plugins`](analytics/plugins):
+plugins for the ticket model, in [`analytics/plugins`](analytics/plugins).
+Each counts the accepted offers (`TicketOffer`'s `Accept` choice, which
+creates the `TicketAgreement`) per day, and its dashboard is one chart of the
+running total at the end of each day or week, picked with the dashboard's
+**Per Day | Week** switch (weeks run Monday to Sunday, UTC):
 
-- **ticket-agreements**: one row per accepted offer (`TicketOffer`'s `Accept`
-  choice, which creates the `TicketAgreement`): offset, time, buyer,
-  organizer and the offer's price. Its dashboard aggregates the raw rows.
-- **ticket-value-by-offset**: the same agreements pre-aggregated per 10,000
-  offsets, upserted as they come in, so its dashboard reads about 1,000 rows
-  for a 10-million-offset ledger.
+- **ticket-agreements**: how many ticket agreements there are to date.
+- **ticket-value**: their total value to date, from each offer's price.
+
+The tables keep one row per day, upserted as agreements come in, so a chart
+reads a few hundred rows however big the ledger gets. The shared code is in
+`analytics/plugins/ticket-totals`.
+
+**Live, on the demo's ledger.** With `just demo` running:
+
+```bash
+just analytics      # starts the daemon in the background and opens the dashboard
+just purchase 20    # buy more tickets; the dashboard picks them up within seconds
+```
+
+The first run installs `canton-analytics` and an explorer built with its
+dashboard into `.demo/analytics/bin`, and needs the `wasm32-wasip2` Rust target
+(the recipe adds it). The daemon signs in as a read-only `analytics` user.
+
+**How fast over a big ledger.** `just analytics-bench` makes up a ledger of
+10 million ticket purchases, one per offset, runs it through both plugins and
+the daemon's own table writer (commits of a million offsets, then
+compaction), and times every dashboard panel. It needs no sandbox or
+SurrealDB:
+
+```bash
+just analytics-bench            # or: just analytics-bench 1000000
+just analytics-tools && just analytics-dashboard .demo/analytics/bench-tables
+```
+
+On a 4-core cloud machine each plugin took about 5 s for the 10 million
+offsets (a year of purchases, 348 days), and each chart then took 6 to 7 ms.
+Each chart shows its query time in the explorer too.
+
+| Recipe | What it does |
+|---|---|
+| `just demo` | Everything below, in order, with one guided purchase and two more |
+| `just tools` | Installs `syncer`, `daml-rust-codegen` and `surrealdb-explorer` into `.demo/bin` at the pinned tags, skipping what is already installed (an explorer installed from a local clone counts) |
+| `just build-dar` | Builds `daml/.daml/dist/ticket-purchase-0.1.0.dar` |
+| `just sandbox` | Starts the Canton sandbox and waits until it is ready |
+| `just surreal` | Starts SurrealDB in memory and creates the `canton` namespace, the `ticket_purchase` database and the `syncer` user |
+| `just setup` | Uploads the DAR, allocates the parties (safe to repeat) |
+| `just sync` | Starts the syncer, which follows every party on the sandbox |
+| `just explorer` | Opens the explorer in the background |
+| `just purchase [count] [pause]` | Buys `count` tickets (default 3), waiting `pause` seconds after each transaction (default 0) |
+| `just explorer-restart` | Restarts only the explorer, for example after installing a new build with `just tools`; the sandbox, SurrealDB and the syncer keep running |
+| `just explorer-limit [n]` | Reopens the explorer showing only the latest `n` transactions (default 5) |
+| `just tickets` | Lists each ticket agreement with the price paid for it, found by walking from the agreement to the `Accept` choice and its offer |
+| `just show <offset>` | Prints the events of the transaction at `offset` in node order: each created contract's arguments and signatories, and each exercised choice's argument and acting parties (needs `jq`) |
+| `just status` | Shows what runs, and the transaction and contract counts in SurrealDB |
+| `just logs [name]` | Follows the log of `sandbox`, `surreal`, `syncer` or `explorer` |
+| `just stop` | Stops the explorer, the syncer, SurrealDB and the sandbox, and waits until their ports are free |
+| `just demo-reset` | Stops everything and deletes `.demo/logs`, `.demo/run` and `.demo/explorer` |
+
+The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
+(gitignored).
+
+## Analytics
+
+The [canton-analytics](https://github.com/gyorgybalazsi/canton-event-graph-syncer/tree/main/analytics)
+daemon turns the event graph into Delta Lake tables through WebAssembly
+plugins, and the explorer's **Dashboard** tab shows them. This repo has two
+plugins for the ticket model, in [`analytics/plugins`](analytics/plugins).
+Each counts the accepted offers (`TicketOffer`'s `Accept` choice, which
+creates the `TicketAgreement`) per day, and its dashboard is one chart of the
+running total at the end of each day or week, picked with the dashboard's
+**Per Day | Week** switch (weeks run Monday to Sunday, UTC):
+
+- **ticket-agreements**: how many ticket agreements there are to date.
+- **ticket-value**: their total value to date, from each offer's price.
+
+The tables keep one row per day, upserted as agreements come in, so a chart
+reads a few hundred rows however big the ledger gets. The shared code is in
+`analytics/plugins/ticket-totals`.
 
 **Live, on the demo's ledger.** With `just demo` running:
 
@@ -172,7 +243,8 @@ the explorer too.
 
 `cargo test --release -p ticket-bench` runs both plugins over two purchases in
 the shape the syncer writes them, through the daemon, and checks the tables
-and every dashboard panel.
+and both charts by day and by week. `cd analytics/plugins && cargo test -p
+ticket-totals` tests the per-day totals on their own.
 
 ## Layout
 
@@ -181,7 +253,7 @@ and every dashboard panel.
 | `daml/` | The Daml model, built into a DAR with `dpm build` |
 | `app/` | The Rust client. `build.rs` runs `daml-rust-codegen` on the DAR, and `src/model.rs` includes the output, so the types always match the model |
 | `config/` | The syncer's and the explorer's settings for the demo |
-| `analytics/` | The ticket analytics plugins (`plugins/`, each its own workspace built for `wasm32-wasip2`), the plugin interface they build against (`wit/`, a copy of the syncer's), and the benchmark (`bench/`) |
+| `analytics/` | The ticket analytics plugins (`plugins/`, a workspace of its own built for `wasm32-wasip2`), the plugin interface they build against (`wit/`, a copy of the syncer's), and the benchmark (`bench/`) |
 | `scripts/demo.sh` | Starts, waits for and stops the background services |
 | `justfile` | The recipes, and the pinned tags of the tools |
 

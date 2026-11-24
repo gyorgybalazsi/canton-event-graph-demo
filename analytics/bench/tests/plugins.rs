@@ -19,31 +19,23 @@ use canton_analytics::source::{self, Connection, UserLevel};
 
 const PURCHASES: &str = include_str!("purchases.surql");
 
-/// Builds a plugin for wasm32-wasip2 and returns the `.wasm` file.
-fn build_plugin(name: &str) -> PathBuf {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../plugins")
-        .join(name);
-    let target = dir.join("target");
+/// Builds the plugins' workspace for wasm32-wasip2 and returns each
+/// plugin's `.wasm` file.
+fn build_plugins(names: [&str; 2]) -> [PathBuf; 2] {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins");
     let status = Command::new(env!("CARGO"))
-        .args([
-            "build",
-            "--release",
-            "--target",
-            "wasm32-wasip2",
-            "--target-dir",
-        ])
-        .arg(&target)
+        .args(["build", "--release", "--target", "wasm32-wasip2"])
         .current_dir(&dir)
         .status()
         .expect("cargo runs");
     assert!(
         status.success(),
-        "building {name} failed; is the wasm32-wasip2 target installed?"
+        "building the plugins failed; is the wasm32-wasip2 target installed?"
     );
-    target
-        .join("wasm32-wasip2/release")
-        .join(format!("{}.wasm", name.replace('-', "_")))
+    names.map(|name| {
+        dir.join("target/wasm32-wasip2/release")
+            .join(format!("{}.wasm", name.replace('-', "_")))
+    })
 }
 
 async fn query(session: &Session, sql: &str) -> Frame {
@@ -64,8 +56,7 @@ fn texts(frame: &Frame, column: &str) -> Vec<String> {
 
 #[test]
 fn ticket_plugins_read_the_syncers_purchases() {
-    let agreements = build_plugin("ticket-agreements");
-    let by_offset = build_plugin("ticket-value-by-offset");
+    let [agreements, value] = build_plugins(["ticket-agreements", "ticket-value"]);
     let dir = std::env::temp_dir().join(format!("ticket-bench-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let tables = Location::parse(&dir.to_string_lossy(), HashMap::new()).unwrap();
@@ -105,51 +96,46 @@ fn ticket_plugins_read_the_syncers_purchases() {
             )
             .await
             .unwrap();
-            let mut b = Runner::new(&engine, &by_offset, &tables, fetcher, options)
+            let mut b = Runner::new(&engine, &value, &tables, fetcher, options)
                 .await
                 .unwrap();
             let (sa, sb) = tokio::join!(a.catch_up(true), b.catch_up(true));
-            assert_eq!(sa.unwrap().rows, 2);
+            assert!(sa.unwrap().rows >= 1);
             assert!(sb.unwrap().rows >= 1);
 
-            // The buyer acted, the organizer and price come from the offer.
-            let session = Session::open(&tables.join("ticket-agreements"))
-                .await
-                .unwrap();
-            let frame = query(
-                &session,
-                "SELECT \"offset\", buyer, organizer, price FROM ticket_agreements ORDER BY 1",
-            )
-            .await;
-            assert_eq!(numbers(&frame, "offset"), [Some(3.0), Some(5.0)]);
-            assert_eq!(texts(&frame, "buyer"), ["Alice::1220bb", "Bob::1220dd"]);
-            assert_eq!(
-                texts(&frame, "organizer"),
-                ["TicketWizard::1220cc", "TicketWizard::1220cc"]
-            );
-            assert_eq!(numbers(&frame, "price"), [Some(25.0), Some(40.5)]);
-            let board = dashboard::load(&session).await.unwrap();
-            for p in &board.panels {
-                assert!(p.frame.is_ok(), "{}: {:?}", p.panel.title, p.frame);
-            }
-            // An offset axis: round buckets, not a time interval.
-            let per_range = board.panels[1].frame.as_ref().unwrap();
-            assert_eq!(numbers(per_range, "offset"), [Some(3.0), Some(5.0)]);
-
-            let session = Session::open(&tables.join("ticket-value-by-offset"))
-                .await
-                .unwrap();
-            let frame = query(
-                &session,
-                "SELECT offset_bucket, agreements, value FROM ticket_value_by_offset",
-            )
-            .await;
-            assert_eq!(numbers(&frame, "offset_bucket"), [Some(0.0)]);
-            assert_eq!(numbers(&frame, "agreements"), [Some(2.0)]);
-            assert_eq!(numbers(&frame, "value"), [Some(65.5)]);
-            let board = dashboard::load(&session).await.unwrap();
-            for p in &board.panels {
-                assert!(p.frame.is_ok(), "{}: {:?}", p.panel.title, p.frame);
+            // Both purchases were on 2 November: one day, two agreements
+            // worth 25 + 40.5 (the prices come from the offers).
+            for (table, column, total) in [
+                ("ticket-agreements", "agreements", 2.0),
+                ("ticket-value", "value", 65.5),
+            ] {
+                let session = Session::open(&tables.join(table)).await.unwrap();
+                let frame = query(
+                    &session,
+                    &format!(
+                        "SELECT day_start, {column} FROM {} ORDER BY 1",
+                        table.replace('-', "_")
+                    ),
+                )
+                .await;
+                assert_eq!(numbers(&frame, column), [Some(total)], "{table}");
+                assert_eq!(
+                    texts(&frame, "day_start"),
+                    ["1793577600000000"],
+                    "{table}: 2026-11-02T00:00Z"
+                );
+                // One chart: the running total, by day.
+                let board = dashboard::load(&session).await.unwrap();
+                assert_eq!(board.panels.len(), 1);
+                let chart = board.panels[0].frame.as_ref().unwrap();
+                assert_eq!(numbers(chart, column), [Some(total)], "{table}");
+                // The same by week, as the dashboard's Week switch asks.
+                let board = dashboard::load_with(&session, dashboard::Period::Week)
+                    .await
+                    .unwrap();
+                assert_eq!(board.panels[0].bucket_seconds, Some(7 * 86_400));
+                let chart = board.panels[0].frame.as_ref().unwrap();
+                assert_eq!(numbers(chart, column), [Some(total)], "{table}");
             }
         })
         .await

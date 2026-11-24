@@ -15,8 +15,8 @@ explorer_tag := "v0.1.0"
 # The analytics daemon and a dashboard-enabled explorer for the `analytics`
 # recipes. Pinned to commits on main until the analytics module gets a release
 # tag; bump `rev` in analytics/bench/Cargo.toml together with analytics_rev.
-analytics_rev := "615c8e6"
-explorer_dashboard_rev := "d41f3f4"
+analytics_rev := "25980fc"
+explorer_dashboard_rev := "b1d229e"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead of GitHub (for example to try local changes).
 explorer_path := env("EXPLORER_PATH", "")
@@ -209,9 +209,9 @@ analytics-plugins:
     @echo "▶ Building the ticket analytics plugins"
     @rustup target add wasm32-wasip2 2>&1 | {{quiet}}
     @mkdir -p "{{plugins}}"
-    @for p in ticket-agreements ticket-value-by-offset; do \
-        (cd analytics/plugins/$p && cargo build --quiet --locked --release --target wasm32-wasip2 --target-dir target) \
-        && cp analytics/plugins/$p/target/wasm32-wasip2/release/${p//-/_}.wasm "{{plugins}}/"; \
+    @cd analytics/plugins && cargo build --quiet --locked --release --target wasm32-wasip2
+    @for p in ticket_agreements ticket_value; do \
+        cp analytics/plugins/target/wasm32-wasip2/release/$p.wasm "{{plugins}}/"; \
     done
 
 # Run the analytics daemon on the demo's SurrealDB in the background, then open the dashboard (start the demo first)
@@ -241,5 +241,5 @@ analytics-dashboard tables=(analytics / "tables"):
 analytics-bench rows="10000000": analytics-plugins
     @rm -rf "{{analytics}}/bench-tables"
     cargo run --quiet --release -p ticket-bench -- table --tables "{{analytics}}/bench-tables" --rows {{rows}} \
-        "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value_by_offset.wasm"
+        "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"
     @echo "Look at them with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-tables"
