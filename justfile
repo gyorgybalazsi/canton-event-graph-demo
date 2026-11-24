@@ -16,7 +16,7 @@ explorer_tag := "v0.1.0"
 # recipes. Pinned to commits on main until the analytics module gets a release
 # tag; bump `rev` in analytics/bench/Cargo.toml together with analytics_rev.
 analytics_rev := "15c0265"
-explorer_dashboard_rev := "62d6465"
+explorer_dashboard_rev := "2ba607c"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead of GitHub (for example to try local changes).
 explorer_path := env("EXPLORER_PATH", "")
