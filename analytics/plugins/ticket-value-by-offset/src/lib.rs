@@ -244,8 +244,12 @@ impl Guest for Plugin {
             panel(
                 "Busiest offset ranges",
                 PanelKind::Table,
-                "SELECT offset_bucket, agreements, value, first_at, last_at \
-                 FROM ticket_value_by_offset ORDER BY agreements DESC LIMIT 20",
+                &format!(
+                    "SELECT concat(offset_bucket, ' – ', offset_bucket + {}) AS offsets, \
+                     agreements, value, first_at, last_at \
+                     FROM ticket_value_by_offset ORDER BY agreements DESC LIMIT 20",
+                    WIDTH - 1
+                ),
                 None,
                 &[("first_at", Timestamp), ("last_at", Timestamp)],
             ),
