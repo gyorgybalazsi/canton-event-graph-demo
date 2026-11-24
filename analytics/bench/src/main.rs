@@ -172,14 +172,22 @@ fn busyness(day: usize) -> f64 {
     let december = 0.4 * (-((year - 0.95) / 0.03).powi(2)).exp();
     let growth = 0.7 + 0.6 * year;
     let noise = 0.75 + (mix(day as i64, 7) % 500) as f64 / 1_000.0;
-    let on_sale = if mix(day as i64, 8) % 23 == 0 { 2.5 } else { 1.0 };
+    let on_sale = if mix(day as i64, 8) % 23 == 0 {
+        2.5
+    } else {
+        1.0
+    };
     week * (1.0 + summer + december) * growth * noise * on_sale
 }
 
 /// How much dearer than usual a day's tickets are: big events cost more.
 fn price_level(day: usize) -> f64 {
     let level = 0.8 + (mix(day as i64, 9) % 400) as f64 / 1_000.0;
-    if mix(day as i64, 8) % 23 == 0 { level * 1.5 } else { level }
+    if mix(day as i64, 8) % 23 == 0 {
+        level * 1.5
+    } else {
+        level
+    }
 }
 
 /// Which day each offset falls on: `ends[d]` is the last offset of day `d`.
@@ -217,7 +225,12 @@ impl Calendar {
 /// The accepted offers at offsets `first..=last`, one per offset, in the
 /// columns the plugins' query returns: 50,000 buyers, 50 organizers, prices
 /// from 20 to 300 times the day's price level.
-fn agreements(calendar: &Calendar, first: i64, last: i64, schema: SchemaRef) -> Result<RecordBatch> {
+fn agreements(
+    calendar: &Calendar,
+    first: i64,
+    last: i64,
+    schema: SchemaRef,
+) -> Result<RecordBatch> {
     let offsets: Vec<i64> = (first..=last).collect();
     let placed: Vec<(usize, i64)> = offsets.iter().map(|&o| calendar.place(o)).collect();
     let at: Vec<i64> = placed.iter().map(|&(_, at)| at).collect();

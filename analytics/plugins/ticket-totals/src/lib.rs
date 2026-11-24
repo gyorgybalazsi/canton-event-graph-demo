@@ -87,12 +87,8 @@ pub struct Spec {
 impl Spec {
     pub fn description(&self) -> &'static str {
         match self.measure {
-            Measure::Agreements => {
-                "New ticket agreements each day or week (UTC)."
-            }
-            Measure::Value => {
-                "Total value of the new ticket agreements each day or week (UTC)."
-            }
+            Measure::Agreements => "New ticket agreements each day or week (UTC).",
+            Measure::Value => "Total value of the new ticket agreements each day or week (UTC).",
         }
     }
 
