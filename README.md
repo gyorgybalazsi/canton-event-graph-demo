@@ -151,6 +151,10 @@ just purchase 20    # buy more tickets; the dashboard picks them up within secon
 The first run installs `canton-analytics` and an explorer built with its
 dashboard into `.demo/analytics/bin`, and needs the `wasm32-wasip2` Rust target
 (the recipe adds it). The daemon signs in as a read-only `analytics` user.
+The dashboard's **Settings** button sets how quickly new purchases show up:
+how often the explorer looks for a commit, and how often the daemon checks
+the ledger and how many rows (or seconds) it collects before committing. The
+daemon takes up its part without a restart.
 
 **How fast over a big ledger.** `just analytics-bench` makes up a year-long
 ledger of 10 million ticket purchases, one per offset, runs it through both plugins and
