@@ -148,6 +148,11 @@ just analytics      # starts the daemon in the background and opens the dashboar
 just purchase 20    # buy more tickets; the dashboard picks them up within seconds
 ```
 
+`just analytics` needs the demo's SurrealDB running on `DEMO_SURREAL_PORT`
+(default 8001). If nothing is listening there, it stops with a message to
+run `just demo` first; it does not start SurrealDB itself. To view benchmark
+tables without SurrealDB, use `just analytics-dashboard` as shown below.
+
 The first run installs `canton-analytics` and an explorer built with its
 dashboard into `.demo/analytics/bin`, and needs the `wasm32-wasip2` Rust target
 (the recipe adds it). The daemon signs in as a read-only `analytics` user.

@@ -18,11 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved
   the server command under `db`.
+- `just analytics` checks that the demo's SurrealDB port is listening before
+  creating its database user or starting the daemon, and tells you to run
+  `just demo` if it is not.
 
 ### Changed
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.
+- The analytics dashboard's explorer pin is updated to `2ba607c`, with fewer
+  tick labels, abbreviated numbers, fainter major gridlines, no minor
+  gridlines and darker chart axes.
 
 ## [0.1.0] - 2026-11-23
 
