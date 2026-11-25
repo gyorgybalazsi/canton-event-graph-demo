@@ -5,8 +5,8 @@
 //! `TicketOffer` template's `Accept` choice, which creates the
 //! `TicketAgreement`) with its time and price. A plugin picks a [`Measure`]
 //! and writes one row per day (UTC): how many agreements that day, or their
-//! value. Its chart adds the days up to the end of each day or week, whichever
-//! the dashboard's Day / Week switch picks (`{period}`).
+//! value. Its chart sums the days into one column per day or per ISO week,
+//! whichever the dashboard's Day / Week switch picks (`{period}`).
 //!
 //! The table is written in merge mode, keyed on the day. A step rewrites the
 //! days it touched, and gives the quiet days between them a row of 0, so a

@@ -996,7 +996,7 @@ dependencies = [
 [[package]]
 name = "canton-analytics"
 version = "0.1.0"
-source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=15c0265#15c0265ae2735b7988f91a46e8129a9a1c8a0da4"
+source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=bdb8852#bdb88526f8675bf8f93bb54e6cac07c1ce807516"
 dependencies = [
  "anyhow",
  "canton-analytics-reader",
@@ -1017,7 +1017,7 @@ dependencies = [
 [[package]]
 name = "canton-analytics-reader"
 version = "0.1.0"
-source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=15c0265#15c0265ae2735b7988f91a46e8129a9a1c8a0da4"
+source = "git+https://github.com/gyorgybalazsi/canton-event-graph-syncer?rev=bdb8852#bdb88526f8675bf8f93bb54e6cac07c1ce807516"
 dependencies = [
  "anyhow",
  "deltalake",
