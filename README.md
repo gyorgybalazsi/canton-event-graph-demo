@@ -198,6 +198,9 @@ just analytics-tools && just analytics-dashboard .demo/analytics/bench-surreal-t
 On a 4-core cloud machine with 20,000 purchases in an in-memory SurrealDB, the
 load took 3.3 s, the catch-up 0.4 s (about 100,000 offsets a second), and each
 SurrealQL query about 270 to 300 ms against 3 to 5 ms from the tables.
+With 1 million purchases on a Mac, the catch-up took 27 s and each SurrealQL
+query about 4.7 s, against under 5 ms from the tables. All measured runs are in
+[analytics/bench/RESULTS.md](analytics/bench/RESULTS.md).
 
 | Recipe | What it does |
 |---|---|
