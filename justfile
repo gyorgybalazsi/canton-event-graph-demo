@@ -271,3 +271,12 @@ analytics-bench-surreal rows="1000000": analytics-plugins
         "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"; \
         status=$?; "{{svc}}" stop bench-surreal > /dev/null; exit $status
     @echo "Look at the tables with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-surreal-tables"
+    @echo "Browse its ledger with: just analytics-bench-surreal-db"
+
+# Start the last benchmark's SurrealDB again, in the background, to browse its ledger in the explorer
+analytics-bench-surreal-db:
+    @test -d "{{analytics}}/bench-surreal/db" || { echo "No benchmark database yet: run just analytics-bench-surreal first" >&2; exit 1; }
+    @"{{svc}}" start bench-surreal "{{analytics}}/bench-surreal" \
+        surreal db start --user root --pass root --bind 127.0.0.1:{{bench_surreal_port}} surrealkv://db
+    @"{{svc}}" wait-http bench-surreal http://127.0.0.1:{{bench_surreal_port}}/health 30
+    @echo "In the explorer: ws://127.0.0.1:{{bench_surreal_port}}, namespace canton, database ticket_bench, root / root (just stop stops it)"

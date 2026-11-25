@@ -200,7 +200,7 @@ look. The benchmark's SurrealDB keeps its data in
 explorer's Canton view like the real demo's ledger:
 
 ```bash
-cd .demo/analytics/bench-surreal && surreal db start --user root --pass root --bind 127.0.0.1:8002 surrealkv://db
+just analytics-bench-surreal-db
 # in the explorer: ws://127.0.0.1:8002, namespace canton, database ticket_bench, root / root
 ```
 
@@ -223,6 +223,7 @@ measured runs are in
 | `just analytics` | Starts the daemon on the demo's SurrealDB (tables in `.demo/analytics/tables`) and opens the dashboard |
 | `just analytics-dashboard [tables]` | Opens the dashboard-enabled explorer on a tables folder; the Graph tab shows the demo's ledger when SurrealDB runs |
 | `just analytics-bench [rows]` | Writes the plugins' tables for a made-up ledger of `rows` offsets (default 10 million) and times their dashboards |
+| `just analytics-bench-surreal-db` | Starts the last benchmark's SurrealDB again, to browse its ledger in the explorer |
 | `just analytics-bench-surreal [rows]` | Loads `rows` made-up purchases (default 1 million) into a fresh SurrealDB, times the daemon's catch-up, and compares SurrealQL with the tables |
 | `just analytics-tools` | Installs `canton-analytics` and the dashboard-enabled explorer, pinned to commits until the analytics module is tagged |
 | `just analytics-plugins` | Builds the two plugins into `.demo/analytics/plugins` |

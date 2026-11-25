@@ -12,6 +12,19 @@ about 1,000 times faster than asking SurrealDB for the same numbers.
 
 ## Demo B: from SurrealDB, `just analytics-bench-surreal`
 
+### 100,000 full purchases on György's Mac, 2026-11-25
+
+Whole purchases (see the next run for what that means), on disk (SurrealKV).
+
+| Step | Time | Rate |
+|---|---|---|
+| Load, 300,000 transactions, 2.5 million records and links | 41.6 s | 2,402 purchases/s |
+| Catch-up, 300,000 offsets | 1.4 s | 207,328 offsets/s (69,109 purchases/s) |
+| SurrealQL per day / week | 556 / 552 ms | |
+| DataFusion per chart | 0–21 ms | |
+
+Cross-check: both gave the same agreements and value for every day and week.
+
 ### 20,000 full purchases on a 4-core cloud machine, 2026-11-25
 
 From this run on, each purchase is the demo's whole flow: three transactions
