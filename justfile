@@ -253,6 +253,8 @@ analytics-bench rows="10000000": analytics-plugins
 
 # Benchmark B: load a made-up ledger (default 1 million purchases) into a fresh SurrealDB as the syncer writes it, time the daemon's catch-up into Delta tables, and ask SurrealDB and the tables for the same numbers
 analytics-bench-surreal rows="1000000": analytics-plugins
+    @# A benchmark SurrealDB left over from an interrupted run: its data is thrown away anyway.
+    @"{{svc}}" stop bench-surreal > /dev/null
     @if "{{svc}}" listening {{bench_surreal_port}}; then \
         echo "error: something already listens on port {{bench_surreal_port}}; set DEMO_BENCH_SURREAL_PORT" >&2; exit 1; \
     fi

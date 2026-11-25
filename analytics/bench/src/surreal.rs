@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use analytics_reader::frame::Frame;
 use analytics_reader::location::Location;
 use analytics_reader::{Session, dashboard};
 use anyhow::{Context, Result, bail, ensure};
@@ -47,23 +48,24 @@ DEFINE INDEX IF NOT EXISTS exercised_target_contract ON exercised FIELDS target_
 DEFINE INDEX IF NOT EXISTS exercised_offset ON exercised FIELDS offset;
 ";
 
-/// The per-day numbers the plugins' tables hold, asked of SurrealDB itself.
+/// The per-day numbers the plugins' tables hold, asked of SurrealDB itself:
+/// each day's start (seconds since 1970), agreements and value.
 const SURREAL_DAYS: &str = "\
-SELECT day, count() AS agreements, math::sum(price) AS value FROM ( \
-    SELECT time::floor(transaction_effective_at, 1d) AS day, \
+SELECT period, count() AS agreements, math::sum(price) AS value FROM ( \
+    SELECT time::unix(time::floor(transaction_effective_at, 1d)) AS period, \
         <float> type::record('created', target_contract_id).create_arguments.price AS price \
     FROM exercised WHERE choice_name = 'Accept' AND template.entity_name = 'TicketOffer' \
-) GROUP BY day ORDER BY day;";
+) GROUP BY period ORDER BY period;";
 
 /// The same by Monday-to-Sunday week. `time::floor` counts weeks from
 /// 1970-01-01, a Thursday, so the times are moved three days on and the
 /// weeks back again.
 const SURREAL_WEEKS: &str = "\
-SELECT week, count() AS agreements, math::sum(price) AS value FROM ( \
-    SELECT time::floor(transaction_effective_at + 3d, 1w) - 3d AS week, \
+SELECT period, count() AS agreements, math::sum(price) AS value FROM ( \
+    SELECT time::unix(time::floor(transaction_effective_at + 3d, 1w) - 3d) AS period, \
         <float> type::record('created', target_contract_id).create_arguments.price AS price \
     FROM exercised WHERE choice_name = 'Accept' AND template.entity_name = 'TicketOffer' \
-) GROUP BY week ORDER BY week;";
+) GROUP BY period ORDER BY period;";
 
 pub struct Args {
     pub url: String,
@@ -224,17 +226,25 @@ async fn catch_up(db: &Db, tables: &Location, plugins: &[PathBuf]) -> Result<(f6
     Ok((seconds, rows))
 }
 
+/// One period's numbers: its start (seconds since 1970), how many
+/// agreements, and their value.
+type Period = (i64, i64, f64);
+
 /// The day and week numbers from SurrealDB and from the tables, timed, and
-/// checked against each other.
+/// checked against each other: the same agreements and value for every day
+/// and week.
 async fn head_to_head(db: &Db, tables: &Location, rows: i64) -> Result<()> {
     println!(
-        "head to head: the same numbers from SurrealDB (raw records) and from the Delta tables"
+        "head to head: the same numbers from SurrealDB (raw records) and from the Delta tables \
+         (one row per day, kept up to date by the plugins)"
     );
-    let mut counted = Vec::new();
+    let mut from_surreal: Vec<Vec<Period>> = Vec::new();
     for (name, sql) in [("day", SURREAL_DAYS), ("week", SURREAL_WEEKS)] {
         let started = Instant::now();
         let mut response = db.query(sql).await?.check()?;
+        let period: Vec<i64> = response.take("period")?;
         let agreements: Vec<i64> = response.take("agreements")?;
+        let value: Vec<f64> = response.take("value")?;
         let millis = started.elapsed().as_millis();
         let total: i64 = agreements.iter().sum();
         ensure!(
@@ -243,15 +253,25 @@ async fn head_to_head(db: &Db, tables: &Location, rows: i64) -> Result<()> {
         );
         println!(
             "  SurrealQL, per {name}: {millis:>7} ms ({} rows)",
-            agreements.len()
+            period.len()
         );
-        counted.push(agreements);
+        from_surreal.push(
+            period
+                .into_iter()
+                .zip(agreements)
+                .zip(value)
+                .map(|((p, a), v)| (p, a, v))
+                .collect(),
+        );
     }
-    for table in ["ticket-agreements", "ticket-value"] {
+    for (table, column) in [
+        ("ticket-agreements", "agreements"),
+        ("ticket-value", "value"),
+    ] {
         let session = Session::open(&tables.join(table)).await?;
         for (period, surreal) in [dashboard::Period::Day, dashboard::Period::Week]
             .into_iter()
-            .zip(&counted)
+            .zip(&from_surreal)
         {
             let started = Instant::now();
             let board = dashboard::load_with(&session, period).await?;
@@ -262,21 +282,57 @@ async fn head_to_head(db: &Db, tables: &Location, rows: i64) -> Result<()> {
                 "  DataFusion, {table} per {period:?}: {millis:>4} ms ({} rows)",
                 frame.rows()
             );
-            // The daemon's tables must say what SurrealDB says, period by period.
-            if table == "ticket-agreements" {
-                let column = frame.column("agreements").context("no agreements column")?;
-                let ours: Vec<i64> = (0..frame.rows())
-                    .map(|i| column.values.number(i).unwrap_or(0.0) as i64)
-                    .collect();
-                ensure!(
-                    &ours == surreal,
-                    "the tables' agreements per {period:?} differ from SurrealDB's"
-                );
-            }
+            let ours = periods(frame, column)?;
+            let theirs: Vec<(i64, f64)> = surreal
+                .iter()
+                .map(|&(p, a, v)| (p, if column == "agreements" { a as f64 } else { v }))
+                .collect();
+            ensure!(
+                same(&ours, &theirs),
+                "{table} per {period:?} differs from SurrealDB: {}",
+                first_difference(&ours, &theirs)
+            );
         }
     }
-    println!("  both give the same agreements for every day and week");
+    println!("  both give the same agreements and value for every day and week");
     Ok(())
+}
+
+/// A chart's (period start in seconds, amount) for the periods with any
+/// agreements: the tables also hold quiet days as 0, SurrealDB leaves them out.
+fn periods(frame: &Frame, column: &str) -> Result<Vec<(i64, f64)>> {
+    let start = frame
+        .column("period_start")
+        .context("no period_start column")?;
+    let amount = frame
+        .column(column)
+        .with_context(|| format!("no {column} column"))?;
+    Ok((0..frame.rows())
+        .filter_map(|i| {
+            let at = start.values.number(i)?.round() as i64;
+            let v = amount.values.number(i).unwrap_or(0.0);
+            (v != 0.0).then_some((at, v))
+        })
+        .collect())
+}
+
+/// Equal periods and amounts; values may differ by rounding in the sums.
+fn same(a: &[(i64, f64)], b: &[(i64, f64)]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|(x, y)| x.0 == y.0 && (x.1 - y.1).abs() <= 0.005 + 1e-9 * y.1.abs())
+}
+
+fn first_difference(a: &[(i64, f64)], b: &[(i64, f64)]) -> String {
+    match a.iter().zip(b).find(|(x, y)| !same(&[**x], &[**y])) {
+        Some((x, y)) => format!("tables {x:?}, SurrealDB {y:?}"),
+        None => format!(
+            "{} periods in the tables, {} in SurrealDB",
+            a.len(),
+            b.len()
+        ),
+    }
 }
 
 /// `2026-01-01T09:00:00.000000Z` for microseconds since 1970 (UTC).
@@ -308,7 +364,18 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 
 #[cfg(test)]
 mod tests {
-    use super::rfc3339;
+    use super::{rfc3339, same};
+
+    #[test]
+    fn quiet_and_rounded_periods_compare_equal() {
+        assert!(same(
+            &[(0, 2.0), (86_400, 65.5)],
+            &[(0, 2.0), (86_400, 65.500_000_1)]
+        ));
+        assert!(!same(&[(0, 2.0)], &[(86_400, 2.0)]));
+        assert!(!same(&[(0, 2.0)], &[(0, 2.0), (86_400, 1.0)]));
+        assert!(!same(&[(0, 65.5)], &[(0, 65.6)]));
+    }
 
     #[test]
     fn times_print_as_surrealql_datetimes() {
