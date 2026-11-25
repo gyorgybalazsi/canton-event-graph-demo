@@ -1,6 +1,6 @@
 [package]
 name = "ticket-agreements"
-description = "Analytics plugin: Ticket agreements to date per day, charted per day or week"
+description = "Analytics plugin: new ticket agreements per day or week"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -27,15 +27,92 @@ use arrow_ipc::reader::StreamReader;
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema, SchemaRef, TimeUnit};
 
-/// Each accepted ticket offer with an offset in `($from, $to]`, with the
-/// offer's terms: the offer is the choice's target contract. The fields are
-/// the syncer's.
+/// Each accepted ticket offer with an offset in `($from, $to]`: when, and
+/// the offer's price (the offer is the choice's target contract, so its
+/// record is looked up once per agreement). The fields are the syncer's.
 pub const QUERY: &str = "\
-SELECT offset, transaction_effective_at AS agreed_at, acting_parties[0] AS buyer, \
-    type::record('created', target_contract_id).create_arguments.organizer AS organizer, \
+SELECT offset, transaction_effective_at AS agreed_at, \
     <float> type::record('created', target_contract_id).create_arguments.price AS price \
     FROM exercised WHERE choice_name = 'Accept' AND template.entity_name = 'TicketOffer' \
     AND offset > $from AND offset <= $to;";
+
+/// Defines a ticket plugin: its WIT bindings, and the exports, which hand
+/// everything to this crate. A plugin crate (next to this one, so the WIT is
+/// at `../../wit`) is one line:
+///
+/// ```ignore
+/// ticket_totals::plugin!("ticket-agreements", ticket_totals::Measure::Agreements);
+/// ```
+#[macro_export]
+macro_rules! plugin {
+    ($name:literal, $measure:expr) => {
+        wit_bindgen::generate!({
+            world: "analytics-plugin",
+            path: "../../wit",
+        });
+
+        use exports::canton::analytics::plugin::{
+            Guest, Panel, PanelKind, PluginInfo, QuerySource, WriteMode,
+        };
+
+        const SPEC: $crate::Spec = $crate::Spec {
+            name: $name,
+            measure: $measure,
+        };
+
+        struct Plugin;
+
+        export!(Plugin);
+
+        impl Guest for Plugin {
+            fn info() -> PluginInfo {
+                PluginInfo {
+                    name: SPEC.name.into(),
+                    version: env!("CARGO_PKG_VERSION").into(),
+                    description: SPEC.description().into(),
+                }
+            }
+
+            fn schema() -> Vec<u8> {
+                SPEC.schema_ipc()
+            }
+
+            fn source() -> QuerySource {
+                QuerySource {
+                    query: $crate::QUERY.into(),
+                    inputs: vec![$crate::input_schema_ipc()],
+                    high_water: $crate::HIGH_WATER.into(),
+                }
+            }
+
+            fn mode() -> WriteMode {
+                WriteMode::Merge(vec![$crate::DAY.into()])
+            }
+
+            fn dashboard() -> Vec<Panel> {
+                vec![Panel {
+                    title: SPEC.chart_title().into(),
+                    kind: PanelKind::Bar,
+                    sql: SPEC.chart_sql(),
+                    time_column: Some($crate::DAY.into()),
+                    formats: Vec::new(),
+                }]
+            }
+
+            fn load_state(state: Vec<u8>) -> Result<(), String> {
+                $crate::load_state(&state)
+            }
+
+            fn save_state() -> Vec<u8> {
+                $crate::save_state()
+            }
+
+            fn transform(results: Vec<Vec<u8>>) -> Result<Vec<u8>, String> {
+                $crate::transform(&SPEC, &results)
+            }
+        }
+    };
+}
 
 /// How far the database has got: the syncer's own mark, else the newest offset.
 pub const HIGH_WATER: &str = "\
@@ -134,8 +211,6 @@ pub fn input_schema() -> SchemaRef {
     Arc::new(Schema::new(vec![
         Field::new("offset", DataType::Int64, true),
         Field::new("agreed_at", timestamp(), true),
-        Field::new("buyer", DataType::Utf8, true),
-        Field::new("organizer", DataType::Utf8, true),
         Field::new("price", DataType::Float64, true),
     ]))
 }
@@ -193,8 +268,12 @@ fn agreements(bytes: &[u8]) -> Result<Vec<(i64, f64)>, String> {
     let mut out = Vec::new();
     for batch in reader {
         let b = batch.map_err(|e| format!("accepted offers: {e}"))?;
-        let at = b.column(1).as_primitive::<TimestampMicrosecondType>();
-        let price = b.column(4).as_primitive::<Float64Type>();
+        let at = column(&b, "agreed_at")?
+            .as_primitive_opt::<TimestampMicrosecondType>()
+            .ok_or("accepted offers: agreed_at is not a timestamp in microseconds")?;
+        let price = column(&b, "price")?
+            .as_primitive_opt::<Float64Type>()
+            .ok_or("accepted offers: price is not a float")?;
         for i in 0..b.num_rows() {
             if at.is_valid(i) {
                 let p = if price.is_valid(i) {
@@ -207,6 +286,12 @@ fn agreements(bytes: &[u8]) -> Result<Vec<(i64, f64)>, String> {
         }
     }
     Ok(out)
+}
+
+fn column<'a>(batch: &'a RecordBatch, name: &str) -> Result<&'a ArrayRef, String> {
+    batch
+        .column_by_name(name)
+        .ok_or_else(|| format!("accepted offers: no {name} column"))
 }
 
 /// One step: adds the step's agreements to their days, and returns every
@@ -261,7 +346,7 @@ pub fn transform(spec: &Spec, results: &[Vec<u8>]) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
     use arrow_array::types::Int64Type;
-    use arrow_array::{Float64Array, Int64Array, StringArray, TimestampMicrosecondArray};
+    use arrow_array::{Float64Array, Int64Array, TimestampMicrosecondArray};
 
     /// 2026-11-02, a Monday, 00:00 UTC.
     const MONDAY: i64 = 1_793_577_600_000_000;
@@ -277,8 +362,6 @@ mod tests {
                 )
                 .with_timezone("UTC"),
             ),
-            Arc::new(StringArray::from(vec!["Alice::1220bb"; n])),
-            Arc::new(StringArray::from(vec!["TicketWizard::1220cc"; n])),
             Arc::new(Float64Array::from(
                 times_prices.iter().map(|t| t.1).collect::<Vec<_>>(),
             )),
@@ -353,6 +436,29 @@ mod tests {
         load_state(&saved).unwrap();
         let rows = run(&spec, &[(MONDAY + DAY_US + HOUR, 4.5)]);
         assert_eq!(rows, [(MONDAY + DAY_US, 45.0)]);
+    }
+
+    #[test]
+    fn a_wrong_column_is_an_error_and_changes_nothing() {
+        DAYS.set(BTreeMap::new());
+        let spec = Spec {
+            name: "t",
+            measure: Measure::Agreements,
+        };
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("offset", DataType::Int64, true),
+            Field::new("agreed_at", DataType::Utf8, true),
+            Field::new("price", DataType::Float64, true),
+        ]));
+        let columns: Vec<ArrayRef> = vec![
+            Arc::new(Int64Array::from(vec![1])),
+            Arc::new(arrow_array::StringArray::from(vec!["today"])),
+            Arc::new(Float64Array::from(vec![25.0])),
+        ];
+        let bytes = ipc(&RecordBatch::try_new(schema, columns).unwrap()).unwrap();
+        let err = transform(&spec, &[bytes]).unwrap_err();
+        assert!(err.contains("agreed_at"), "{err}");
+        assert!(DAYS.with_borrow(BTreeMap::is_empty));
     }
 
     #[test]

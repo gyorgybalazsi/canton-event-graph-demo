@@ -223,6 +223,8 @@ analytics: analytics-tools analytics-plugins
     @"{{svc}}" listening {{surreal_port}} || { echo "SurrealDB isn't running (nothing on port {{surreal_port}}): start the demo first with 'just demo'" >&2; exit 1; }
     @just _sql "USE NS canton DB ticket_purchase; \
         DEFINE USER IF NOT EXISTS analytics ON DATABASE PASSWORD 'analytics' ROLES VIEWER;" > /dev/null
+    @# Restart a running daemon, so it loads the plugins just built; it carries on from its tables.
+    @"{{svc}}" stop analytics > /dev/null
     @SURREAL_URL=ws://127.0.0.1:{{surreal_port}} SURREAL_NAMESPACE=canton SURREAL_DATABASE=ticket_purchase \
         SURREAL_USER=analytics SURREAL_PASSWORD=analytics \
         "{{svc}}" start analytics "{{analytics}}" "{{analytics_bin}}/canton-analytics" run \
