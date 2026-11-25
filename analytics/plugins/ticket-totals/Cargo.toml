@@ -1,6 +1,6 @@
 [package]
 name = "ticket-totals"
-description = "Running totals of ticket agreements per day or week, shared by the ticket plugins"
+description = "Ticket agreements per day, charted per day or week; shared by the ticket plugins"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

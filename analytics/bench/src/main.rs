@@ -20,7 +20,7 @@ use canton_analytics::plugin::{self, Plugin};
 use canton_analytics::table::Table;
 use clap::{Parser, Subcommand};
 use deltalake::arrow::array::{
-    Array, ArrayRef, Float64Array, Int64Array, RecordBatch, StringArray, TimestampMicrosecondArray,
+    Array, ArrayRef, Float64Array, Int64Array, RecordBatch, TimestampMicrosecondArray,
 };
 use deltalake::arrow::datatypes::SchemaRef;
 
@@ -134,18 +134,21 @@ async fn table(tables: &str, rows: i64, plugins: &[PathBuf]) -> Result<()> {
             rows as f64 / wrote.as_secs_f64(),
             compacted.as_secs_f64(),
         );
-        let loaded = Instant::now();
-        let d = dashboard::load(&session).await?;
-        println!(
-            "  dashboard: table opened in {open_ms} ms, all panels in {} ms",
-            loaded.elapsed().as_millis()
-        );
-        for p in &d.panels {
-            let outcome = match &p.frame {
-                Ok(f) => format!("{} rows", f.rows()),
-                Err(e) => format!("error: {e}"),
-            };
-            println!("    {:>5} ms  {} ({outcome})", p.millis, p.panel.title);
+        println!("  dashboard: table opened in {open_ms} ms");
+        for period in [dashboard::Period::Day, dashboard::Period::Week] {
+            let loaded = Instant::now();
+            let d = dashboard::load_with(&session, period).await?;
+            println!(
+                "  per {period:?}: all panels in {} ms",
+                loaded.elapsed().as_millis()
+            );
+            for p in &d.panels {
+                let outcome = match &p.frame {
+                    Ok(f) => format!("{} rows", f.rows()),
+                    Err(e) => format!("error: {e}"),
+                };
+                println!("    {:>5} ms  {} ({outcome})", p.millis, p.panel.title);
+            }
         }
     }
     Ok(())
@@ -223,8 +226,8 @@ impl Calendar {
 }
 
 /// The accepted offers at offsets `first..=last`, one per offset, in the
-/// columns the plugins' query returns: 50,000 buyers, 50 organizers, prices
-/// from 20 to 300 times the day's price level.
+/// columns the plugins' query returns, with prices from 20 to 300 times the
+/// day's price level.
 fn agreements(
     calendar: &Calendar,
     first: i64,
@@ -234,14 +237,6 @@ fn agreements(
     let offsets: Vec<i64> = (first..=last).collect();
     let placed: Vec<(usize, i64)> = offsets.iter().map(|&o| calendar.place(o)).collect();
     let at: Vec<i64> = placed.iter().map(|&(_, at)| at).collect();
-    let buyer: Vec<String> = offsets
-        .iter()
-        .map(|&o| format!("Buyer{}::1220aa", mix(o, 1) % 50_000))
-        .collect();
-    let organizer: Vec<String> = offsets
-        .iter()
-        .map(|&o| format!("Organizer{}::1220bb", mix(o, 2) % 50))
-        .collect();
     let price: Vec<f64> = offsets
         .iter()
         .zip(&placed)
@@ -253,8 +248,6 @@ fn agreements(
     let columns: Vec<ArrayRef> = vec![
         Arc::new(Int64Array::from(offsets)),
         Arc::new(TimestampMicrosecondArray::from(at).with_timezone("UTC")),
-        Arc::new(StringArray::from(buyer)),
-        Arc::new(StringArray::from(organizer)),
         Arc::new(Float64Array::from(price)),
     ];
     Ok(RecordBatch::try_new(schema, columns)?)
@@ -277,6 +270,19 @@ mod tests {
             last = at;
         }
         assert!(calendar.place(rows).0 == DAYS - 1);
+    }
+
+    #[test]
+    fn a_ledger_smaller_than_a_year_still_fits() {
+        for rows in [1, 100, 364] {
+            let calendar = Calendar::new(rows);
+            let mut last = i64::MIN;
+            for o in 1..=rows {
+                let (day, at) = calendar.place(o);
+                assert!(day < DAYS && at > last, "{rows} rows, offset {o}");
+                last = at;
+            }
+        }
     }
 
     #[test]
