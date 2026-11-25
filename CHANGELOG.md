@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Day / Week switch); `just analytics` runs the daemon on the demo's ledger
   next to the explorer's dashboard, and `just analytics-bench` times it over
   a made-up year of 10 million purchases that vary by weekday and season.
+- `just analytics-bench-surreal` loads a made-up ledger (default 1 million
+  purchases) into a SurrealDB of its own as the syncer writes it, times the
+  daemon's catch-up from offset 0, and times the same per-day and per-week
+  numbers in SurrealQL and in DataFusion, checking that they agree.
 
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved

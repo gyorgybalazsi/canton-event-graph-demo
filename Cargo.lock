@@ -7873,6 +7873,7 @@ dependencies = [
  "canton-analytics-reader",
  "clap",
  "deltalake",
+ "futures-util",
  "surrealdb",
  "tokio",
 ]

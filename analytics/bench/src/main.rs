@@ -8,6 +8,8 @@
 //! Only SurrealDB and the ledger are left out, so the tables are what the
 //! daemon would write for a ledger that size.
 
+mod surreal;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -45,6 +47,32 @@ enum Command {
         #[arg(required = true)]
         plugins: Vec<PathBuf>,
     },
+    /// Load a made-up ledger into SurrealDB as the syncer writes it, time the
+    /// daemon's catch-up from there into Delta tables, then ask SurrealDB and
+    /// the tables for the same numbers.
+    Surreal {
+        /// The SurrealDB server (ws://…), or mem:// for an in-process one.
+        #[arg(long, default_value = "ws://127.0.0.1:8002")]
+        url: String,
+        #[arg(long, default_value = "canton")]
+        namespace: String,
+        #[arg(long, default_value = "ticket_bench")]
+        database: String,
+        /// A root user of the server.
+        #[arg(long, default_value = "root")]
+        user: String,
+        #[arg(long, default_value = "root")]
+        pass: String,
+        /// Purchases to load; each is two records at two offsets.
+        #[arg(long, default_value_t = 1_000_000)]
+        rows: i64,
+        /// Folder for the tables; each plugin writes a sub-folder named after it.
+        #[arg(long, default_value = "bench-surreal-tables")]
+        tables: String,
+        /// The plugins' `.wasm` files.
+        #[arg(required = true)]
+        plugins: Vec<PathBuf>,
+    },
 }
 
 /// Offsets per commit.
@@ -59,6 +87,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
+        // An in-process SurrealDB (`--url mem://`) needs a deep stack.
+        .thread_stack_size(16 << 20)
         .build()?;
     // On a worker thread: plugin calls use `block_in_place`.
     rt.block_on(async move {
@@ -69,6 +99,28 @@ fn main() -> Result<()> {
                     rows,
                     plugins,
                 } => table(&tables, rows, &plugins).await,
+                Command::Surreal {
+                    url,
+                    namespace,
+                    database,
+                    user,
+                    pass,
+                    rows,
+                    tables,
+                    plugins,
+                } => {
+                    surreal::run(surreal::Args {
+                        url,
+                        namespace,
+                        database,
+                        user,
+                        pass,
+                        rows,
+                        tables,
+                        plugins,
+                    })
+                    .await
+                }
             }
         })
         .await?
@@ -222,9 +274,30 @@ impl Calendar {
     }
 }
 
+/// One made-up purchase: when, who and for how much.
+struct Purchase {
+    at: i64,
+    buyer: String,
+    organizer: String,
+    price: f64,
+}
+
+/// Purchase number `n` (from 1): 50,000 buyers, 50 organizers, prices from
+/// 20 to 300 times the day's price level, at the time its day's busyness
+/// puts it. The same `n` always gives the same purchase.
+fn purchase(calendar: &Calendar, n: i64) -> Purchase {
+    let (day, at) = calendar.place(n);
+    let base = 20.0 + (mix(n, 3) % 2_800) as f64 / 10.0;
+    Purchase {
+        at,
+        buyer: format!("Buyer{}::1220aa", mix(n, 1) % 50_000),
+        organizer: format!("Organizer{}::1220bb", mix(n, 2) % 50),
+        price: (base * price_level(day) * 100.0).round() / 100.0,
+    }
+}
+
 /// The accepted offers at offsets `first..=last`, one per offset, in the
-/// columns the plugins' query returns: 50,000 buyers, 50 organizers, prices
-/// from 20 to 300 times the day's price level.
+/// columns the plugins' query returns.
 fn agreements(
     calendar: &Calendar,
     first: i64,
@@ -232,30 +305,22 @@ fn agreements(
     schema: SchemaRef,
 ) -> Result<RecordBatch> {
     let offsets: Vec<i64> = (first..=last).collect();
-    let placed: Vec<(usize, i64)> = offsets.iter().map(|&o| calendar.place(o)).collect();
-    let at: Vec<i64> = placed.iter().map(|&(_, at)| at).collect();
-    let buyer: Vec<String> = offsets
-        .iter()
-        .map(|&o| format!("Buyer{}::1220aa", mix(o, 1) % 50_000))
-        .collect();
-    let organizer: Vec<String> = offsets
-        .iter()
-        .map(|&o| format!("Organizer{}::1220bb", mix(o, 2) % 50))
-        .collect();
-    let price: Vec<f64> = offsets
-        .iter()
-        .zip(&placed)
-        .map(|(&o, &(day, _))| {
-            let base = 20.0 + (mix(o, 3) % 2_800) as f64 / 10.0;
-            (base * price_level(day) * 100.0).round() / 100.0
-        })
-        .collect();
+    let purchases: Vec<Purchase> = offsets.iter().map(|&o| purchase(calendar, o)).collect();
     let columns: Vec<ArrayRef> = vec![
         Arc::new(Int64Array::from(offsets)),
-        Arc::new(TimestampMicrosecondArray::from(at).with_timezone("UTC")),
-        Arc::new(StringArray::from(buyer)),
-        Arc::new(StringArray::from(organizer)),
-        Arc::new(Float64Array::from(price)),
+        Arc::new(
+            TimestampMicrosecondArray::from_iter_values(purchases.iter().map(|p| p.at))
+                .with_timezone("UTC"),
+        ),
+        Arc::new(StringArray::from_iter_values(
+            purchases.iter().map(|p| p.buyer.as_str()),
+        )),
+        Arc::new(StringArray::from_iter_values(
+            purchases.iter().map(|p| p.organizer.as_str()),
+        )),
+        Arc::new(Float64Array::from_iter_values(
+            purchases.iter().map(|p| p.price),
+        )),
     ];
     Ok(RecordBatch::try_new(schema, columns)?)
 }

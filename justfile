@@ -34,6 +34,8 @@ ledger_port := "6865"
 # Not 8000, so the demo doesn't collide with a SurrealDB server you already run.
 surreal_port := env("DEMO_SURREAL_PORT", "8001")
 surreal_http := "http://127.0.0.1:" + surreal_port
+# The benchmark's own SurrealDB, apart from the demo's
+bench_surreal_port := env("DEMO_BENCH_SURREAL_PORT", "8002")
 # Demo-only credentials for the throwaway in-memory server on 127.0.0.1.
 surreal_root_pass := "root"
 syncer_pass := "syncer"
@@ -177,6 +179,7 @@ status:
 
 # Stop the analytics daemon and dashboard, the explorer, the syncer, SurrealDB and the sandbox
 stop:
+    @"{{svc}}" stop bench-surreal > /dev/null
     @"{{svc}}" stop dashboard
     @"{{svc}}" stop analytics
     @"{{svc}}" stop explorer
@@ -247,3 +250,20 @@ analytics-bench rows="10000000": analytics-plugins
     cargo run --quiet --release -p ticket-bench -- table --tables "{{analytics}}/bench-tables" --rows {{rows}} \
         "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"
     @echo "Look at them with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-tables"
+
+# Benchmark B: load a made-up ledger (default 1 million purchases) into a fresh SurrealDB as the syncer writes it, time the daemon's catch-up into Delta tables, and ask SurrealDB and the tables for the same numbers
+analytics-bench-surreal rows="1000000": analytics-plugins
+    @if "{{svc}}" listening {{bench_surreal_port}}; then \
+        echo "error: something already listens on port {{bench_surreal_port}}; set DEMO_BENCH_SURREAL_PORT" >&2; exit 1; \
+    fi
+    @rm -rf "{{analytics}}/bench-surreal" "{{analytics}}/bench-surreal-tables"
+    @mkdir -p "{{analytics}}/bench-surreal"
+    @# On disk (SurrealKV), as a real syncer's database would be.
+    @"{{svc}}" start bench-surreal "{{analytics}}/bench-surreal" \
+        surreal db start --user root --pass root --bind 127.0.0.1:{{bench_surreal_port}} surrealkv://db
+    @"{{svc}}" wait-http bench-surreal http://127.0.0.1:{{bench_surreal_port}}/health 30
+    @cargo run --quiet --release -p ticket-bench -- surreal --url ws://127.0.0.1:{{bench_surreal_port}} \
+        --rows {{rows}} --tables "{{analytics}}/bench-surreal-tables" \
+        "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"; \
+        status=$?; "{{svc}}" stop bench-surreal > /dev/null; exit $status
+    @echo "Look at the tables with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-surreal-tables"

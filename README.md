@@ -179,11 +179,30 @@ On a 4-core cloud machine each plugin took about 5 s for the 10 million
 offsets (a year of purchases), and each chart then took 6 to 7 ms.
 Each chart shows its query time in the explorer too.
 
+**How fast from SurrealDB.** `just analytics-bench-surreal` starts a SurrealDB
+of its own (on disk, port 8002), loads a made-up ledger into it in the shape
+the syncer writes (each purchase is a `TicketOffer` create and its `Accept`,
+so 1 million purchases are 2 million offsets), and times three things: the
+load, the daemon catching up from offset 0 into both plugins' tables, and the
+same per-day and per-week numbers asked of SurrealDB (SurrealQL `GROUP BY`)
+and of the tables (DataFusion). It checks that both give the same agreements
+for every day and week, then stops its SurrealDB.
+
+```bash
+just analytics-bench-surreal            # or: just analytics-bench-surreal 100000
+just analytics-tools && just analytics-dashboard .demo/analytics/bench-surreal-tables
+```
+
+On a 4-core cloud machine with 20,000 purchases in an in-memory SurrealDB, the
+load took 3.5 s, the catch-up 0.6 s (about 66,000 offsets a second), and each
+SurrealQL query about 275 ms against 2 to 4 ms from the tables.
+
 | Recipe | What it does |
 |---|---|
 | `just analytics` | Starts the daemon on the demo's SurrealDB (tables in `.demo/analytics/tables`) and opens the dashboard |
 | `just analytics-dashboard [tables]` | Opens the dashboard-enabled explorer on a tables folder; the Graph tab shows the demo's ledger when SurrealDB runs |
 | `just analytics-bench [rows]` | Writes the plugins' tables for a made-up ledger of `rows` offsets (default 10 million) and times their dashboards |
+| `just analytics-bench-surreal [rows]` | Loads `rows` made-up purchases (default 1 million) into a fresh SurrealDB, times the daemon's catch-up, and compares SurrealQL with the tables |
 | `just analytics-tools` | Installs `canton-analytics` and the dashboard-enabled explorer, pinned to commits until the analytics module is tagged |
 | `just analytics-plugins` | Builds the two plugins into `.demo/analytics/plugins` |
 
