@@ -22,7 +22,7 @@ use canton_analytics::plugin::{self, Plugin};
 use canton_analytics::table::Table;
 use clap::{Parser, Subcommand};
 use deltalake::arrow::array::{
-    Array, ArrayRef, Float64Array, Int64Array, RecordBatch, StringArray, TimestampMicrosecondArray,
+    Array, ArrayRef, Float64Array, Int64Array, RecordBatch, TimestampMicrosecondArray,
 };
 use deltalake::arrow::datatypes::SchemaRef;
 
@@ -186,18 +186,21 @@ async fn table(tables: &str, rows: i64, plugins: &[PathBuf]) -> Result<()> {
             rows as f64 / wrote.as_secs_f64(),
             compacted.as_secs_f64(),
         );
-        let loaded = Instant::now();
-        let d = dashboard::load(&session).await?;
-        println!(
-            "  dashboard: table opened in {open_ms} ms, all panels in {} ms",
-            loaded.elapsed().as_millis()
-        );
-        for p in &d.panels {
-            let outcome = match &p.frame {
-                Ok(f) => format!("{} rows", f.rows()),
-                Err(e) => format!("error: {e}"),
-            };
-            println!("    {:>5} ms  {} ({outcome})", p.millis, p.panel.title);
+        println!("  dashboard: table opened in {open_ms} ms");
+        for period in [dashboard::Period::Day, dashboard::Period::Week] {
+            let loaded = Instant::now();
+            let d = dashboard::load_with(&session, period).await?;
+            println!(
+                "  per {period:?}: all panels in {} ms",
+                loaded.elapsed().as_millis()
+            );
+            for p in &d.panels {
+                let outcome = match &p.frame {
+                    Ok(f) => format!("{} rows", f.rows()),
+                    Err(e) => format!("error: {e}"),
+                };
+                println!("    {:>5} ms  {} ({outcome})", p.millis, p.panel.title);
+            }
         }
     }
     Ok(())
@@ -312,12 +315,6 @@ fn agreements(
             TimestampMicrosecondArray::from_iter_values(purchases.iter().map(|p| p.at))
                 .with_timezone("UTC"),
         ),
-        Arc::new(StringArray::from_iter_values(
-            purchases.iter().map(|p| p.buyer.as_str()),
-        )),
-        Arc::new(StringArray::from_iter_values(
-            purchases.iter().map(|p| p.organizer.as_str()),
-        )),
         Arc::new(Float64Array::from_iter_values(
             purchases.iter().map(|p| p.price),
         )),
@@ -342,6 +339,19 @@ mod tests {
             last = at;
         }
         assert!(calendar.place(rows).0 == DAYS - 1);
+    }
+
+    #[test]
+    fn a_ledger_smaller_than_a_year_still_fits() {
+        for rows in [1, 100, 364] {
+            let calendar = Calendar::new(rows);
+            let mut last = i64::MIN;
+            for o in 1..=rows {
+                let (day, at) = calendar.place(o);
+                assert!(day < DAYS && at > last, "{rows} rows, offset {o}");
+                last = at;
+            }
+        }
     }
 
     #[test]

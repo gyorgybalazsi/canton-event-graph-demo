@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `just analytics-bench-surreal` loads a made-up ledger (default 1 million
   purchases) into a SurrealDB of its own as the syncer writes it, times the
   daemon's catch-up from offset 0, and times the same per-day and per-week
-  numbers in SurrealQL and in DataFusion, checking that they agree.
+  numbers in SurrealQL and in DataFusion, checking that they agree on the
+  agreements and the value of every day and week.
 
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved
@@ -27,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `just demo` if it is not.
 
 ### Changed
+- The ticket plugins' query reads only an agreement's time and price; it no
+  longer looks up each offer's organizer, which nothing charts (catch-up about
+  15% faster on 50,000 purchases). They read those columns by name and give an
+  error, not a crash, if one has the wrong type. The two plugin crates share
+  their glue through `ticket_totals::plugin!`.
+- `just analytics` restarts a running daemon, so it loads the plugins it has
+  just built.
+- `just analytics-bench` times the dashboards per day and per week.
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.
