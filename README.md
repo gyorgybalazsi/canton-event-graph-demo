@@ -181,8 +181,7 @@ Each chart shows its query time in the explorer too.
 
 **How fast from SurrealDB.** `just analytics-bench-surreal` starts a SurrealDB
 of its own (on disk, port 8002), loads a made-up ledger into it in the shape
-the syncer writes (each purchase is a `TicketOffer` create and its `Accept`,
-so 1 million purchases are 2 million offsets), and times three things: the
+the syncer writes, and times three things: the
 load, the daemon catching up from offset 0 into both plugins' tables, and the
 same per-day and per-week numbers asked of SurrealDB (SurrealQL `GROUP BY`)
 and of the tables (DataFusion). SurrealDB adds up the raw records each time;
@@ -190,16 +189,33 @@ the tables already hold one row per day, which the plugins keep up to date, so
 that is the gap the comparison shows. It checks that both give the same
 agreements and value for every day and week, then stops its SurrealDB.
 
+Each purchase is the demo's whole flow, as three transactions: the bank issues
+the cash, the organizer offers the ticket, and the buyer accepts, which pays
+the organizer and creates the `TicketAgreement`. With the transactions, the
+parties and the links between events, that is 25 records and links per
+purchase, so 1 million purchases make 3 million offsets and take a while to
+load (a quarter of an hour or so on a Mac, at a guess); 100,000 is plenty for a
+look. The benchmark's SurrealDB keeps its data in
+`.demo/analytics/bench-surreal` until the next run, so you can browse it in the
+explorer's Canton view like the real demo's ledger:
+
+```bash
+cd .demo/analytics/bench-surreal && surreal db start --user root --pass root --bind 127.0.0.1:8002 surrealkv://db
+# in the explorer: ws://127.0.0.1:8002, namespace canton, database ticket_bench, root / root
+```
+
 ```bash
 just analytics-bench-surreal            # or: just analytics-bench-surreal 100000
 just analytics-tools && just analytics-dashboard .demo/analytics/bench-surreal-tables
 ```
 
-On a 4-core cloud machine with 20,000 purchases in an in-memory SurrealDB, the
-load took 3.3 s, the catch-up 0.4 s (about 100,000 offsets a second), and each
-SurrealQL query about 270 to 300 ms against 3 to 5 ms from the tables.
-With 1 million purchases on a Mac, the catch-up took 27 s and each SurrealQL
-query about 4.7 s, against under 5 ms from the tables. All measured runs are in
+On a 4-core cloud machine with 20,000 full purchases (60,000 offsets) in an
+in-memory SurrealDB, the load took 56 s, the catch-up 0.6 s (about 100,000
+offsets a second), and each SurrealQL query about 300 to 330 ms against 3 to
+14 ms from the tables. With 1 million purchases on a Mac, written in an earlier,
+leaner shape (only the offers and their accepts), the catch-up took 27 s and
+each SurrealQL query about 4.7 s, against under 5 ms from the tables. All
+measured runs are in
 [analytics/bench/RESULTS.md](analytics/bench/RESULTS.md).
 
 | Recipe | What it does |

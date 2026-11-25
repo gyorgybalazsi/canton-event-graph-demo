@@ -63,7 +63,7 @@ enum Command {
         user: String,
         #[arg(long, default_value = "root")]
         pass: String,
-        /// Purchases to load; each is two records at two offsets.
+        /// Purchases to load; each is three transactions (cash, offer, accept).
         #[arg(long, default_value_t = 1_000_000)]
         rows: i64,
         /// Folder for the tables; each plugin writes a sub-folder named after it.
@@ -227,7 +227,7 @@ fn busyness(day: usize) -> f64 {
     let december = 0.4 * (-((year - 0.95) / 0.03).powi(2)).exp();
     let growth = 0.7 + 0.6 * year;
     let noise = 0.75 + (mix(day as i64, 7) % 500) as f64 / 1_000.0;
-    let on_sale = if mix(day as i64, 8) % 23 == 0 {
+    let on_sale = if mix(day as i64, 8).is_multiple_of(23) {
         2.5
     } else {
         1.0
@@ -238,7 +238,7 @@ fn busyness(day: usize) -> f64 {
 /// How much dearer than usual a day's tickets are: big events cost more.
 fn price_level(day: usize) -> f64 {
     let level = 0.8 + (mix(day as i64, 9) % 400) as f64 / 1_000.0;
-    if mix(day as i64, 8) % 23 == 0 {
+    if mix(day as i64, 8).is_multiple_of(23) {
         level * 1.5
     } else {
         level

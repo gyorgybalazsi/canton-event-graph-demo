@@ -12,12 +12,31 @@ about 1,000 times faster than asking SurrealDB for the same numbers.
 
 ## Demo B: from SurrealDB, `just analytics-bench-surreal`
 
-### 1 million purchases on György's Mac, 2026-11-25
+### 20,000 full purchases on a 4-core cloud machine, 2026-11-25
 
-A purchase is two ledger offsets: the `TicketOffer` contract is created, then
-its `Accept` choice is exercised. So 1 million purchases make 2 million
-offsets. The data is loaded into a SurrealDB of the benchmark's own, on disk
-(SurrealKV).
+From this run on, each purchase is the demo's whole flow: three transactions
+(cash, offer, accept) with every contract, choice, party and link the syncer
+writes, 25 records and links in all, so the explorer's Canton view can browse
+it. This used an in-memory SurrealDB and a release build.
+
+| Step | Time |
+|---|---|
+| Load, 60,000 transactions, 500,000 records and links | 56.0 s (357 purchases/s) |
+| Catch-up, 60,000 offsets | 0.6 s (about 104,000 offsets/s) |
+| SurrealQL per day / week | 313 / 334 ms |
+| DataFusion per chart | 3–14 ms |
+
+Loading takes about 17 times longer than the lean shape below, because it
+writes about 12 times as many records. The catch-up and query times barely
+move, since they read only the accepts and their offers.
+
+### 1 million purchases on György's Mac, 2026-11-25 (lean shape)
+
+In this run's lean shape a purchase was two ledger offsets: the `TicketOffer`
+contract was created, then its `Accept` choice was exercised. So 1 million
+purchases made 2 million offsets. Nothing else was written: no cash,
+agreement, transactions or links. The data was loaded into a SurrealDB of the
+benchmark's own, on disk (SurrealKV).
 
 | Step | Time | Rate |
 |---|---|---|
@@ -47,7 +66,7 @@ head to head: the same numbers from SurrealDB (raw records) and from the Delta t
   both give the same agreements and value for every day and week
 ```
 
-### 20,000 purchases on a 4-core cloud machine, 2026-11-25
+### 20,000 purchases on a 4-core cloud machine, 2026-11-25 (lean shape)
 
 These used an in-memory SurrealDB and a release build, with the plugins from
 #24.
@@ -93,7 +112,7 @@ plugins and the daemon's table writer.
 
 Captions that fit on screen:
 
-1. "1 million ticket purchases: 2 million ledger offsets in SurrealDB"
+1. "1 million ticket purchases in SurrealDB"
 2. "Analytics daemon catches up: 27 seconds"
 3. "Same chart straight from SurrealDB: 4.7 seconds"
 4. "From the Delta tables: under 5 milliseconds"
