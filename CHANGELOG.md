@@ -7,14 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Analytics: two canton-analytics plugins for the ticket model,
+  `ticket-agreements` and `ticket-value`, each a column chart of the new
+  agreements (or their value) per day or per ISO week (the dashboard's
+  Day / Week switch); `just analytics` runs the daemon on the demo's ledger
+  next to the explorer's dashboard, and `just analytics-bench` times it over
+  a made-up year of 10 million purchases that vary by weekday and season.
+
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved
   the server command under `db`.
+- `just analytics` checks that the demo's SurrealDB port is listening before
+  creating its database user or starting the daemon, and tells you to run
+  `just demo` if it is not.
 
 ### Changed
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.
+- The analytics pins point at the merged commits: the syncer's analytics crates
+  at `bdb8852` and the explorer's dashboard at `f51d815`, with fewer tick
+  labels, abbreviated numbers, fainter major gridlines, no minor gridlines,
+  darker chart axes and dashboard settings for the daemon's lag.
 
 ## [0.1.0] - 2026-11-23
 

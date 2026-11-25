@@ -91,9 +91,11 @@ demo query** from **Choose a saved query…**, then press **Run**: the table und
 the query lists each accepted offer with its buyer and price, like
 `just tickets`.
 
-`just stop` stops everything, including the explorer. `just demo-reset` also
-deletes the demo's logs and settings; the sandbox and SurrealDB keep their
-data in memory, so the next `just demo` starts from an empty ledger.
+`just stop` stops everything, including the explorer and the analytics daemon. `just demo-reset` also
+deletes the demo's logs, settings and analytics tables; the sandbox and
+SurrealDB keep their data in memory, so the next `just demo` starts from an
+empty ledger (and a fresh SurrealDB also clears the analytics tables, which
+were made from the old ledger).
 
 ## Recipes
 
@@ -120,6 +122,76 @@ data in memory, so the next `just demo` starts from an empty ledger.
 The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
 (gitignored).
 
+## Analytics
+
+The [canton-analytics](https://github.com/gyorgybalazsi/canton-event-graph-syncer/tree/main/analytics)
+daemon turns the event graph into Delta Lake tables through WebAssembly
+plugins, and the explorer's **Dashboard** tab shows them. This repo has two
+plugins for the ticket model, in [`analytics/plugins`](analytics/plugins).
+Each counts the accepted offers (`TicketOffer`'s `Accept` choice, which
+creates the `TicketAgreement`) per day, and its dashboard is one column
+chart with a column per day or per week, picked with the dashboard's
+**Per Day | Week** switch. Weeks are ISO weeks (Monday to Sunday, UTC) and
+are labelled by week number, such as `W48`:
+
+- **ticket-agreements**: how many new ticket agreements each day or week has.
+- **ticket-value**: their total value, from each offer's price.
+
+The tables keep one row per day, upserted as agreements come in, so a chart
+reads a few hundred rows however big the ledger gets. The shared code is in
+`analytics/plugins/ticket-totals`.
+
+**Live, on the demo's ledger.** With `just demo` running:
+
+```bash
+just analytics      # starts the daemon in the background and opens the dashboard
+just purchase 20    # buy more tickets; the dashboard picks them up within seconds
+```
+
+`just analytics` needs the demo's SurrealDB running on `DEMO_SURREAL_PORT`
+(default 8001). If nothing is listening there, it stops with a message to
+run `just demo` first; it does not start SurrealDB itself. To view benchmark
+tables without SurrealDB, use `just analytics-dashboard` as shown below.
+
+The first run installs `canton-analytics` and an explorer built with its
+dashboard into `.demo/analytics/bin`, and needs the `wasm32-wasip2` Rust target
+(the recipe adds it). The daemon signs in as a read-only `analytics` user.
+The dashboard's **Settings** button sets how quickly new purchases show up:
+how often the explorer looks for a commit, and how often the daemon checks
+the ledger and how many rows (or seconds) it collects before committing. The
+daemon takes up its part without a restart.
+
+**How fast over a big ledger.** `just analytics-bench` makes up a year-long
+ledger of 10 million ticket purchases, one per offset, runs it through both plugins and
+the daemon's own table writer (commits of a million offsets, then
+compaction), and times every dashboard panel. It needs no sandbox or
+SurrealDB. The made-up sales vary like real ones: weekends sell more than
+weekdays, summer and December are high season, sales grow through the year,
+every day is a bit off, and now and then a big event goes on sale with dearer
+tickets.
+
+```bash
+just analytics-bench            # or: just analytics-bench 1000000
+just analytics-tools && just analytics-dashboard .demo/analytics/bench-tables
+```
+
+On a 4-core cloud machine each plugin took about 5 s for the 10 million
+offsets (a year of purchases), and each chart then took 6 to 7 ms.
+Each chart shows its query time in the explorer too.
+
+| Recipe | What it does |
+|---|---|
+| `just analytics` | Starts the daemon on the demo's SurrealDB (tables in `.demo/analytics/tables`) and opens the dashboard |
+| `just analytics-dashboard [tables]` | Opens the dashboard-enabled explorer on a tables folder; the Graph tab shows the demo's ledger when SurrealDB runs |
+| `just analytics-bench [rows]` | Writes the plugins' tables for a made-up ledger of `rows` offsets (default 10 million) and times their dashboards |
+| `just analytics-tools` | Installs `canton-analytics` and the dashboard-enabled explorer, pinned to commits until the analytics module is tagged |
+| `just analytics-plugins` | Builds the two plugins into `.demo/analytics/plugins` |
+
+`cargo test --release -p ticket-bench` runs both plugins over two purchases in
+the shape the syncer writes them, through the daemon, and checks the tables
+and both charts by day and by week. `cd analytics/plugins && cargo test -p
+ticket-totals` tests the per-day totals on their own.
+
 ## Layout
 
 | Path | Contents |
@@ -127,6 +199,7 @@ The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
 | `daml/` | The Daml model, built into a DAR with `dpm build` |
 | `app/` | The Rust client. `build.rs` runs `daml-rust-codegen` on the DAR, and `src/model.rs` includes the output, so the types always match the model |
 | `config/` | The syncer's and the explorer's settings for the demo |
+| `analytics/` | The ticket analytics plugins (`plugins/`, a workspace of its own built for `wasm32-wasip2`), the plugin interface they build against (`wit/`, a copy of the syncer's), and the benchmark (`bench/`) |
 | `scripts/demo.sh` | Starts, waits for and stops the background services |
 | `justfile` | The recipes, and the pinned tags of the tools |
 

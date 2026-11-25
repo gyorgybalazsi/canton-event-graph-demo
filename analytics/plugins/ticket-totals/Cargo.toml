@@ -1,0 +1,13 @@
+[package]
+name = "ticket-totals"
+description = "Running totals of ticket agreements per day or week, shared by the ticket plugins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+arrow-array = { version = "59", default-features = false }
+arrow-ipc = { version = "59", default-features = false }
+arrow-schema = { version = "59", default-features = false }
+serde_json = "1"

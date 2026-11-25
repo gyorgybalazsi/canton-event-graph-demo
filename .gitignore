@@ -5,3 +5,5 @@
 /daml/log
 # Everything `just demo` creates: installed tools, configs, logs, pid files.
 /.demo
+# The analytics plugins build in their own workspace.
+/analytics/plugins/target

@@ -1,0 +1,29 @@
+# The ticket analytics plugins, built for wasm32-wasip2:
+#
+#     cargo build --release --target wasm32-wasip2
+#
+# Each plugin is one small crate that picks what it counts; the per-day
+# totals themselves are in `ticket-totals`, which also runs its unit
+# tests on the host (`cargo test -p ticket-totals`).
+[workspace]
+resolver = "3"
+members = [
+    "ticket-totals",
+    "ticket-agreements",
+    "ticket-value",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+ticket-totals = { path = "ticket-totals" }
+wit-bindgen = "0.63"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

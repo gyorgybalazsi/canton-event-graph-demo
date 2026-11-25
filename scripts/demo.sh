@@ -83,7 +83,7 @@ stop() {
 
 status() {
     local name
-    for name in sandbox surreal syncer explorer; do
+    for name in sandbox surreal syncer explorer analytics dashboard; do
         if running "$name"; then
             echo "$name: running (pid $(cat "$run/$name.pid"))"
         else
