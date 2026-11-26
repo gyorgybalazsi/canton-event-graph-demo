@@ -16,7 +16,7 @@ explorer_tag := "v0.1.0"
 # recipes. Pinned to commits on main until the analytics module gets a release
 # tag; bump `rev` in analytics/bench/Cargo.toml together with analytics_rev.
 analytics_rev := "bdb8852"
-explorer_dashboard_rev := "f51d815"
+explorer_dashboard_rev := "b533d93"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead of GitHub (for example to try local changes).
 explorer_path := env("EXPLORER_PATH", "")
@@ -34,6 +34,8 @@ ledger_port := "6865"
 # Not 8000, so the demo doesn't collide with a SurrealDB server you already run.
 surreal_port := env("DEMO_SURREAL_PORT", "8001")
 surreal_http := "http://127.0.0.1:" + surreal_port
+# The benchmark's own SurrealDB, apart from the demo's
+bench_surreal_port := env("DEMO_BENCH_SURREAL_PORT", "8002")
 # Demo-only credentials for the throwaway in-memory server on 127.0.0.1.
 surreal_root_pass := "root"
 syncer_pass := "syncer"
@@ -177,6 +179,7 @@ status:
 
 # Stop the analytics daemon and dashboard, the explorer, the syncer, SurrealDB and the sandbox
 stop:
+    @"{{svc}}" stop bench-surreal > /dev/null
     @"{{svc}}" stop dashboard
     @"{{svc}}" stop analytics
     @"{{svc}}" stop explorer
@@ -239,9 +242,7 @@ analytics-dashboard tables=(analytics / "tables"):
     @mkdir -p "{{analytics}}/explorer" "{{tables}}"
     @# Without the demo's SurrealDB running (say, for the benchmark's tables), no database: it opens on the dashboard.
     @if "{{svc}}" listening {{surreal_port}}; then server=ws://127.0.0.1:{{surreal_port}}; else server=; fi; \
-        sed "s#ws://127.0.0.1:8001#$server#" config/explorer.toml > "{{analytics}}/explorer/config.toml"
-    @printf '\n[analytics]\nlocation = "%s"\n' "$(cd "{{tables}}" && pwd)" >> "{{analytics}}/explorer/config.toml"
-    @"{{svc}}" start dashboard "{{analytics}}/explorer" "{{analytics_bin}}/surrealdb-explorer"
+        just _dashboard "{{tables}}" "$server" ticket_purchase 50
 
 # Benchmark: write the ticket plugins' tables for a made-up ledger (default 10 million offsets) and time their dashboards
 analytics-bench rows="10000000": analytics-plugins
@@ -249,3 +250,43 @@ analytics-bench rows="10000000": analytics-plugins
     cargo run --quiet --release -p ticket-bench -- table --tables "{{analytics}}/bench-tables" --rows {{rows}} \
         "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"
     @echo "Look at them with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-tables"
+
+# Benchmark B: load a made-up ledger (default 1 million purchases) into a fresh SurrealDB as the syncer writes it, time the daemon's catch-up into Delta tables, and ask SurrealDB and the tables for the same numbers
+analytics-bench-surreal rows="1000000": analytics-plugins
+    @# A benchmark SurrealDB left over from an interrupted run: its data is thrown away anyway.
+    @"{{svc}}" stop bench-surreal > /dev/null
+    @if "{{svc}}" listening {{bench_surreal_port}}; then \
+        echo "error: something already listens on port {{bench_surreal_port}}; set DEMO_BENCH_SURREAL_PORT" >&2; exit 1; \
+    fi
+    @rm -rf "{{analytics}}/bench-surreal" "{{analytics}}/bench-surreal-tables"
+    @mkdir -p "{{analytics}}/bench-surreal"
+    @# On disk (SurrealKV), as a real syncer's database would be.
+    @"{{svc}}" start bench-surreal "{{analytics}}/bench-surreal" \
+        surreal db start --user root --pass root --bind 127.0.0.1:{{bench_surreal_port}} surrealkv://db
+    @"{{svc}}" wait-http bench-surreal http://127.0.0.1:{{bench_surreal_port}}/health 30
+    @cargo run --quiet --release -p ticket-bench -- surreal --url ws://127.0.0.1:{{bench_surreal_port}} \
+        --rows {{rows}} --tables "{{analytics}}/bench-surreal-tables" \
+        "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"; \
+        status=$?; "{{svc}}" stop bench-surreal > /dev/null; exit $status
+    @echo "Look at the tables with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-surreal-tables"
+    @echo "Browse its ledger and tables with: just analytics-tools && just analytics-bench-surreal-db"
+
+# Start the last benchmark's SurrealDB again and open the explorer on it: its ledger in the Graph tab, its tables in the Dashboard tab
+analytics-bench-surreal-db:
+    @test -d "{{analytics}}/bench-surreal/db" || { echo "No benchmark database yet: run just analytics-bench-surreal first" >&2; exit 1; }
+    @"{{svc}}" start bench-surreal "{{analytics}}/bench-surreal" \
+        surreal db start --user root --pass root --bind 127.0.0.1:{{bench_surreal_port}} surrealkv://db
+    @"{{svc}}" wait-http bench-surreal http://127.0.0.1:{{bench_surreal_port}}/health 30
+    @echo "▶ Opening the explorer on the benchmark's ledger (Graph tab) and its tables (Dashboard tab); just stop stops both"
+    @"{{svc}}" stop dashboard > /dev/null
+    @# 48 transactions: a multiple of the benchmark's three per purchase, so each row is cash, offer, accept.
+    @just _dashboard "{{analytics}}/bench-surreal-tables" ws://127.0.0.1:{{bench_surreal_port}} ticket_bench 48
+
+# The dashboard-enabled explorer on a tables folder and a database ("" for none), in the background
+_dashboard tables server database transactions:
+    @mkdir -p "{{analytics}}/explorer" "{{tables}}"
+    @sed -e "s#ws://127.0.0.1:8001#{{server}}#" -e 's#^database = "ticket_purchase"#database = "{{database}}"#' \
+        -e 's#^canton_transactions = 50#canton_transactions = {{transactions}}#' \
+        config/explorer.toml > "{{analytics}}/explorer/config.toml"
+    @printf '\n[analytics]\nlocation = "%s"\n' "$(cd "{{tables}}" && pwd)" >> "{{analytics}}/explorer/config.toml"
+    @"{{svc}}" start dashboard "{{analytics}}/explorer" "{{analytics_bin}}/surrealdb-explorer"

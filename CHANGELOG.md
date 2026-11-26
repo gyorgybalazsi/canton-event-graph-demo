@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Day / Week switch); `just analytics` runs the daemon on the demo's ledger
   next to the explorer's dashboard, and `just analytics-bench` times it over
   a made-up year of 10 million purchases that vary by weekday and season.
+- `just analytics-bench-surreal` loads a made-up ledger (default 1 million
+  purchases, each the demo's whole flow of three transactions, browsable in
+  the explorer's Canton view) into a SurrealDB of its own as the syncer
+  writes it, times the daemon's catch-up from offset 0, and times the same
+  per-day and per-week numbers in SurrealQL and in DataFusion, checking that
+  they agree on the agreements and the value of every day and week.
 
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved
@@ -38,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at `bdb8852` and the explorer's dashboard at `f51d815`, with fewer tick
   labels, abbreviated numbers, fainter major gridlines, no minor gridlines,
   darker chart axes and dashboard settings for the daemon's lag.
+- The analytics explorer pin moves to `b533d93` (explorer main), which adds
+  the Canton items to the record menu (lifecycle, show in table, filters,
+  more copies) and copying or saving a picture of the whole graph canvas.
 
 ## [0.1.0] - 2026-11-23
 

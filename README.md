@@ -179,11 +179,55 @@ On a 4-core cloud machine each plugin took about 5 s for the 10 million
 offsets (a year of purchases), and each chart then took 6 to 7 ms.
 Each chart shows its query time in the explorer too.
 
+**How fast from SurrealDB.** `just analytics-bench-surreal` starts a SurrealDB
+of its own (on disk, port 8002), loads a made-up ledger into it in the shape
+the syncer writes, and times three things: the
+load, the daemon catching up from offset 0 into both plugins' tables, and the
+same per-day and per-week numbers asked of SurrealDB (SurrealQL `GROUP BY`)
+and of the tables (DataFusion). SurrealDB adds up the raw records each time;
+the tables already hold one row per day, which the plugins keep up to date, so
+that is the gap the comparison shows. It checks that both give the same
+agreements and value for every day and week, then stops its SurrealDB.
+
+Each purchase is the demo's whole flow, as three transactions: the bank issues
+the cash, the organizer offers the ticket, and the buyer accepts, which pays
+the organizer and creates the `TicketAgreement`. With the transactions, the
+parties and the links between events, that is 25 records and links per
+purchase, so 1 million purchases make 3 million offsets and take a while to
+load (a quarter of an hour or so on a Mac, at a guess); 100,000 is plenty for a
+look. The benchmark's SurrealDB keeps its data in
+`.demo/analytics/bench-surreal` until the next run, so you can browse it in the
+explorer's Canton view like the real demo's ledger:
+
+```bash
+just analytics-tools && just analytics-bench-surreal-db
+```
+
+It opens the explorer on the benchmark's SurrealDB (`ws://127.0.0.1:8002`,
+database `ticket_bench`): the Graph tab shows the newest 50 transactions, and
+the Dashboard tab the benchmark's tables. `just stop` stops both.
+
+```bash
+just analytics-bench-surreal            # or: just analytics-bench-surreal 100000
+just analytics-tools && just analytics-dashboard .demo/analytics/bench-surreal-tables
+```
+
+On a 4-core cloud machine with 20,000 full purchases (60,000 offsets) in an
+in-memory SurrealDB, the load took 56 s, the catch-up 0.6 s (about 100,000
+offsets a second), and each SurrealQL query about 300 to 330 ms against 3 to
+14 ms from the tables. With 1 million purchases on a Mac, written in an earlier,
+leaner shape (only the offers and their accepts), the catch-up took 27 s and
+each SurrealQL query about 4.7 s, against under 5 ms from the tables. All
+measured runs are in
+[analytics/bench/RESULTS.md](analytics/bench/RESULTS.md).
+
 | Recipe | What it does |
 |---|---|
 | `just analytics` | Starts the daemon on the demo's SurrealDB (tables in `.demo/analytics/tables`) and opens the dashboard |
 | `just analytics-dashboard [tables]` | Opens the dashboard-enabled explorer on a tables folder; the Graph tab shows the demo's ledger when SurrealDB runs |
 | `just analytics-bench [rows]` | Writes the plugins' tables for a made-up ledger of `rows` offsets (default 10 million) and times their dashboards |
+| `just analytics-bench-surreal-db` | Starts the last benchmark's SurrealDB again and opens the explorer on it: its ledger in the Graph tab, its tables in the Dashboard tab |
+| `just analytics-bench-surreal [rows]` | Loads `rows` made-up purchases (default 1 million) into a fresh SurrealDB, times the daemon's catch-up, and compares SurrealQL with the tables |
 | `just analytics-tools` | Installs `canton-analytics` and the dashboard-enabled explorer, pinned to commits until the analytics module is tagged |
 | `just analytics-plugins` | Builds the two plugins into `.demo/analytics/plugins` |
 
