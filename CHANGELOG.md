@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes it, times the daemon's catch-up from offset 0, and times the same
   per-day and per-week numbers in SurrealQL and in DataFusion, checking that
   they agree on the agreements and the value of every day and week.
+- The ticket dashboards show headline figures above the chart (the newest
+  day or week, the one before, the change, the best, the total), and each
+  day's row keeps the ledger offsets of its first and last agreement, so a
+  click on a column in the explorer shows that day's or week's transactions.
+  The tables gained two columns: remove tables written by an earlier version
+  (`just demo-reset`, or a fresh `just demo` with SurrealDB stopped).
 
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved

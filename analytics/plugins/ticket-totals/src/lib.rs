@@ -1,12 +1,15 @@
 //! Ticket agreements per day, for a column chart of each day's or week's
-//! new agreements.
+//! new agreements, with headline figures above it.
 //!
 //! Both ticket plugins read the same rows: each accepted ticket offer (the
 //! `TicketOffer` template's `Accept` choice, which creates the
 //! `TicketAgreement`) with its time and price. A plugin picks a [`Measure`]
 //! and writes one row per day (UTC): how many agreements that day, or their
 //! value. Its chart sums the days into one column per day or per ISO week,
-//! whichever the dashboard's Day / Week switch picks (`{period}`).
+//! whichever the dashboard's Day / Week switch picks (`{period}`). Each row
+//! also keeps the ledger offsets of the day's first and last agreement
+//! (`first_offset`, `last_offset`), so a click on a column in the explorer
+//! shows that day's or week's transactions in its Graph tab.
 //!
 //! The table is written in merge mode, keyed on the day. A step rewrites the
 //! days it touched, and gives the quiet days between them a row of 0, so a
@@ -21,7 +24,7 @@ use std::sync::Arc;
 
 use arrow_array::builder::{Float64Builder, Int64Builder, TimestampMicrosecondBuilder};
 use arrow_array::cast::AsArray;
-use arrow_array::types::{Float64Type, TimestampMicrosecondType};
+use arrow_array::types::{Float64Type, Int64Type, TimestampMicrosecondType};
 use arrow_array::{Array, ArrayRef, RecordBatch};
 use arrow_ipc::reader::StreamReader;
 use arrow_ipc::writer::StreamWriter;
@@ -90,13 +93,22 @@ macro_rules! plugin {
             }
 
             fn dashboard() -> Vec<Panel> {
-                vec![Panel {
-                    title: SPEC.chart_title().into(),
-                    kind: PanelKind::Bar,
-                    sql: SPEC.chart_sql(),
-                    time_column: Some($crate::DAY.into()),
-                    formats: Vec::new(),
-                }]
+                vec![
+                    Panel {
+                        title: SPEC.headline_title().into(),
+                        kind: PanelKind::Stats,
+                        sql: SPEC.headline_sql(),
+                        time_column: None,
+                        formats: Vec::new(),
+                    },
+                    Panel {
+                        title: SPEC.chart_title().into(),
+                        kind: PanelKind::Bar,
+                        sql: SPEC.chart_sql(),
+                        time_column: Some($crate::DAY.into()),
+                        formats: Vec::new(),
+                    },
+                ]
             }
 
             fn load_state(state: Vec<u8>) -> Result<(), String> {
@@ -124,6 +136,12 @@ const DAY_US: i64 = 86_400_000_000;
 
 /// The table's key: the day's first moment, UTC.
 pub const DAY: &str = "day_start";
+
+/// The ledger offsets of a day's first and last agreement (empty on a quiet
+/// day). The explorer reads columns by these names as the offsets a chart's
+/// column covers, and doesn't draw them.
+pub const FIRST_OFFSET: &str = "first_offset";
+pub const LAST_OFFSET: &str = "last_offset";
 
 /// The start of the day that holds `us` (microseconds since 1970, UTC).
 pub fn day_start(us: i64) -> i64 {
@@ -169,7 +187,39 @@ impl Spec {
         }
     }
 
-    /// The dashboard's one chart.
+    /// The figures above the chart.
+    pub fn headline_title(&self) -> &'static str {
+        match self.measure {
+            Measure::Agreements => "Ticket agreements",
+            Measure::Value => "Ticket agreement value",
+        }
+    }
+
+    /// One row: the newest day's or week's amount, the one before it, the
+    /// change between them, the best, and the total. The newest period may
+    /// still be under way.
+    pub fn headline_sql(&self) -> String {
+        format!(
+            "WITH p AS (SELECT date_bin({{period}}, {DAY}, TIMESTAMP '2001-01-01T00:00:00Z') AS period_start, \
+               sum({m}) AS m FROM {t} GROUP BY 1), \
+             r AS (SELECT m, lag(m) OVER (ORDER BY period_start) AS before, \
+               row_number() OVER (ORDER BY period_start DESC) AS k FROM p) \
+             SELECT r.m AS \"latest\", r.before AS \"the one before\", \
+               CASE WHEN r.before IS NULL OR r.before = 0 THEN '–' \
+                 ELSE concat(CASE WHEN r.m > r.before THEN '+' ELSE '' END, \
+                   CAST(round((r.m - r.before) * 100.0 / r.before) AS BIGINT), '%') END AS \"change\", \
+               a.best AS \"best\", a.total AS \"all time\" \
+             FROM r CROSS JOIN (SELECT max(m) AS best, sum(m) AS total FROM p) a WHERE r.k = 1",
+            m = self.measure.column(),
+            t = self.table(),
+        )
+    }
+
+    fn table(&self) -> String {
+        self.name.replace('-', "_")
+    }
+
+    /// The dashboard's chart.
     pub fn chart_title(&self) -> &'static str {
         match self.measure {
             Measure::Agreements => "New ticket agreements",
@@ -183,9 +233,10 @@ impl Spec {
     pub fn chart_sql(&self) -> String {
         format!(
             "SELECT date_bin({{period}}, {DAY}, TIMESTAMP '2001-01-01T00:00:00Z') AS period_start, \
-             sum({m}) AS \"{m}\" FROM {t} GROUP BY 1 ORDER BY 1",
+             sum({m}) AS \"{m}\", min({FIRST_OFFSET}) AS {FIRST_OFFSET}, max({LAST_OFFSET}) AS {LAST_OFFSET} \
+             FROM {t} GROUP BY 1 ORDER BY 1",
             m = self.measure.column(),
-            t = self.name.replace('-', "_"),
+            t = self.table(),
         )
     }
 
@@ -193,6 +244,8 @@ impl Spec {
         Arc::new(Schema::new(vec![
             Field::new(DAY, timestamp(), false),
             Field::new(self.measure.column(), self.measure.data_type(), false),
+            Field::new(FIRST_OFFSET, DataType::Int64, true),
+            Field::new(LAST_OFFSET, DataType::Int64, true),
         ]))
     }
 
@@ -228,12 +281,17 @@ fn ipc(batch: &RecordBatch) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// One day's agreements: how many, and their value.
+/// One day's agreements: how many, their value, and the ledger offsets of
+/// the first and last.
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 struct Day {
     agreements: i64,
     value: f64,
+    offsets: Option<(i64, i64)>,
 }
+
+/// A day in the saved state: start, agreements, value, first and last offset.
+type SavedDay = (i64, i64, f64, Option<i64>, Option<i64>);
 
 thread_local! {
     /// Day start → that day's agreements.
@@ -241,11 +299,21 @@ thread_local! {
 }
 
 pub fn load_state(state: &[u8]) -> Result<(), String> {
-    let rows: Vec<(i64, i64, f64)> =
+    let rows: Vec<SavedDay> =
         serde_json::from_slice(state).map_err(|e| format!("bad state: {e}"))?;
     let days = rows
         .into_iter()
-        .map(|(start, agreements, value)| (start, Day { agreements, value }))
+        .map(|(start, agreements, value, first, last)| {
+            let offsets = first.zip(last);
+            (
+                start,
+                Day {
+                    agreements,
+                    value,
+                    offsets,
+                },
+            )
+        })
         .collect();
     DAYS.set(days);
     Ok(())
@@ -253,21 +321,28 @@ pub fn load_state(state: &[u8]) -> Result<(), String> {
 
 pub fn save_state() -> Vec<u8> {
     DAYS.with_borrow(|days| {
-        let rows: Vec<(i64, i64, f64)> = days
+        let rows: Vec<SavedDay> = days
             .iter()
-            .map(|(start, d)| (*start, d.agreements, d.value))
+            .map(|(start, d)| {
+                let (first, last) = d.offsets.unzip();
+                (*start, d.agreements, d.value, first, last)
+            })
             .collect();
         serde_json::to_vec(&rows).expect("the state encodes")
     })
 }
 
-/// (time, price) of each accepted offer. An offer without a time can't be
-/// put in a day and is left out; one without a price counts with 0.
-fn agreements(bytes: &[u8]) -> Result<Vec<(i64, f64)>, String> {
+/// (offset, time, price) of each accepted offer. An offer without an offset
+/// or a time can't be put in a day and is left out; one without a price
+/// counts with 0.
+fn agreements(bytes: &[u8]) -> Result<Vec<(i64, i64, f64)>, String> {
     let reader = StreamReader::try_new(bytes, None).map_err(|e| format!("accepted offers: {e}"))?;
     let mut out = Vec::new();
     for batch in reader {
         let b = batch.map_err(|e| format!("accepted offers: {e}"))?;
+        let offset = column(&b, "offset")?
+            .as_primitive_opt::<Int64Type>()
+            .ok_or("accepted offers: offset is not a 64-bit integer")?;
         let at = column(&b, "agreed_at")?
             .as_primitive_opt::<TimestampMicrosecondType>()
             .ok_or("accepted offers: agreed_at is not a timestamp in microseconds")?;
@@ -275,13 +350,13 @@ fn agreements(bytes: &[u8]) -> Result<Vec<(i64, f64)>, String> {
             .as_primitive_opt::<Float64Type>()
             .ok_or("accepted offers: price is not a float")?;
         for i in 0..b.num_rows() {
-            if at.is_valid(i) {
+            if offset.is_valid(i) && at.is_valid(i) {
                 let p = if price.is_valid(i) {
                     price.value(i)
                 } else {
                     0.0
                 };
-                out.push((at.value(i), p));
+                out.push((offset.value(i), at.value(i), p));
             }
         }
     }
@@ -305,11 +380,15 @@ pub fn transform(spec: &Spec, results: &[Vec<u8>]) -> Result<Vec<u8>, String> {
 
     let days: Vec<(i64, Day)> = DAYS.with_borrow_mut(|days| {
         let mut earliest = None::<i64>;
-        for (at, price) in rows {
+        for (offset, at, price) in rows {
             let start = day_start(at);
             let d = days.entry(start).or_default();
             d.agreements += 1;
             d.value += price;
+            d.offsets = Some(match d.offsets {
+                Some((first, last)) => (first.min(offset), last.max(offset)),
+                None => (offset, offset),
+            });
             earliest = Some(earliest.map_or(start, |e| e.min(start)));
         }
         let Some(earliest) = earliest else {
@@ -337,15 +416,28 @@ pub fn transform(spec: &Spec, results: &[Vec<u8>]) -> Result<Vec<u8>, String> {
             Arc::new(b.finish())
         }
     };
-    let batch = RecordBatch::try_new(spec.output_schema(), vec![Arc::new(key.finish()), measure])
-        .map_err(|e| e.to_string())?;
+    let mut first = Int64Builder::new();
+    let mut last = Int64Builder::new();
+    for (_, d) in &days {
+        first.append_option(d.offsets.map(|o| o.0));
+        last.append_option(d.offsets.map(|o| o.1));
+    }
+    let batch = RecordBatch::try_new(
+        spec.output_schema(),
+        vec![
+            Arc::new(key.finish()),
+            measure,
+            Arc::new(first.finish()),
+            Arc::new(last.finish()),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
     ipc(&batch)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow_array::types::Int64Type;
     use arrow_array::{Float64Array, Int64Array, TimestampMicrosecondArray};
 
     /// 2026-11-02, a Monday, 00:00 UTC.
@@ -459,6 +551,55 @@ mod tests {
         let err = transform(&spec, &[bytes]).unwrap_err();
         assert!(err.contains("agreed_at"), "{err}");
         assert!(DAYS.with_borrow(BTreeMap::is_empty));
+    }
+
+    /// Runs one step and returns its (day start, first offset, last offset) rows.
+    fn offsets(spec: &Spec, times_prices: &[(i64, f64)]) -> Vec<(i64, Option<i64>, Option<i64>)> {
+        let out = transform(spec, &[step(times_prices)]).unwrap();
+        let mut rows = Vec::new();
+        for batch in StreamReader::try_new(out.as_slice(), None).unwrap() {
+            let b = batch.unwrap();
+            let keys = b.column(0).as_primitive::<TimestampMicrosecondType>();
+            let first = b.column_by_name(FIRST_OFFSET).unwrap().as_primitive::<Int64Type>();
+            let last = b.column_by_name(LAST_OFFSET).unwrap().as_primitive::<Int64Type>();
+            let get = |a: &arrow_array::Int64Array, i| a.is_valid(i).then(|| a.value(i));
+            for i in 0..b.num_rows() {
+                rows.push((keys.value(i), get(first, i), get(last, i)));
+            }
+        }
+        rows
+    }
+
+    #[test]
+    fn each_day_keeps_its_first_and_last_offset() {
+        DAYS.set(BTreeMap::new());
+        let spec = Spec {
+            name: "t",
+            measure: Measure::Agreements,
+        };
+        // Offsets 1 and 2 on Monday, none on Tuesday, 3 on Wednesday.
+        let rows = offsets(
+            &spec,
+            &[
+                (MONDAY + HOUR, 25.0),
+                (MONDAY + 2 * HOUR, 40.5),
+                (MONDAY + 2 * DAY_US, 10.0),
+            ],
+        );
+        assert_eq!(
+            rows,
+            [
+                (MONDAY, Some(1), Some(2)),
+                (MONDAY + DAY_US, None, None),
+                (MONDAY + 2 * DAY_US, Some(3), Some(3))
+            ]
+        );
+        // They survive a restart, and a later step widens the day.
+        let saved = save_state();
+        DAYS.set(BTreeMap::new());
+        load_state(&saved).unwrap();
+        let rows = offsets(&spec, &[(MONDAY + 2 * DAY_US + HOUR, 5.0)]);
+        assert_eq!(rows, [(MONDAY + 2 * DAY_US, Some(1), Some(3))]);
     }
 
     #[test]

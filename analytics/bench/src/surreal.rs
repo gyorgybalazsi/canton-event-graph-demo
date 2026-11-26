@@ -30,6 +30,7 @@ use std::time::Instant;
 
 use analytics_reader::frame::Frame;
 use analytics_reader::location::Location;
+use analytics_reader::manifest::PanelKind;
 use analytics_reader::{Session, dashboard};
 use anyhow::{Context, Result, bail, ensure};
 use canton_analytics::fetch::Fetcher;
@@ -557,15 +558,25 @@ async fn head_to_head(db: &Db, tables: &Location, rows: i64) -> Result<()> {
             .into_iter()
             .zip(&from_surreal)
         {
-            let started = Instant::now();
             let board = dashboard::load_with(&session, period).await?;
-            let millis = started.elapsed().as_millis();
-            let panel = board.panels.first().context("no panel")?;
+            // The chart, timed on its own: the headline figures above it
+            // are another query.
+            let panel = board
+                .panels
+                .iter()
+                .find(|p| p.panel.kind == PanelKind::Bar)
+                .context("no chart")?;
             let frame = panel.frame.as_ref().map_err(|e| anyhow::anyhow!("{e}"))?;
             println!(
-                "  DataFusion, {table} per {period:?}: {millis:>4} ms ({} rows)",
+                "  DataFusion, {table} per {period:?}: {:>4} ms ({} rows)",
+                panel.millis,
                 frame.rows()
             );
+            for other in board.panels.iter().filter(|p| p.panel.kind != PanelKind::Bar) {
+                if let Err(e) = &other.frame {
+                    bail!("{table}: the panel {} failed: {e}", other.panel.title);
+                }
+            }
             let ours = periods(frame, column)?;
             let theirs: Vec<(i64, f64)> = surreal
                 .iter()
