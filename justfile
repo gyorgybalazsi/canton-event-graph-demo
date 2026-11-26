@@ -242,9 +242,7 @@ analytics-dashboard tables=(analytics / "tables"):
     @mkdir -p "{{analytics}}/explorer" "{{tables}}"
     @# Without the demo's SurrealDB running (say, for the benchmark's tables), no database: it opens on the dashboard.
     @if "{{svc}}" listening {{surreal_port}}; then server=ws://127.0.0.1:{{surreal_port}}; else server=; fi; \
-        sed "s#ws://127.0.0.1:8001#$server#" config/explorer.toml > "{{analytics}}/explorer/config.toml"
-    @printf '\n[analytics]\nlocation = "%s"\n' "$(cd "{{tables}}" && pwd)" >> "{{analytics}}/explorer/config.toml"
-    @"{{svc}}" start dashboard "{{analytics}}/explorer" "{{analytics_bin}}/surrealdb-explorer"
+        just _dashboard "{{tables}}" "$server" ticket_purchase
 
 # Benchmark: write the ticket plugins' tables for a made-up ledger (default 10 million offsets) and time their dashboards
 analytics-bench rows="10000000": analytics-plugins
@@ -271,12 +269,22 @@ analytics-bench-surreal rows="1000000": analytics-plugins
         "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"; \
         status=$?; "{{svc}}" stop bench-surreal > /dev/null; exit $status
     @echo "Look at the tables with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-surreal-tables"
-    @echo "Browse its ledger with: just analytics-bench-surreal-db"
+    @echo "Browse its ledger and tables with: just analytics-tools && just analytics-bench-surreal-db"
 
-# Start the last benchmark's SurrealDB again, in the background, to browse its ledger in the explorer
+# Start the last benchmark's SurrealDB again and open the explorer on it: its ledger in the Graph tab, its tables in the Dashboard tab
 analytics-bench-surreal-db:
     @test -d "{{analytics}}/bench-surreal/db" || { echo "No benchmark database yet: run just analytics-bench-surreal first" >&2; exit 1; }
     @"{{svc}}" start bench-surreal "{{analytics}}/bench-surreal" \
         surreal db start --user root --pass root --bind 127.0.0.1:{{bench_surreal_port}} surrealkv://db
     @"{{svc}}" wait-http bench-surreal http://127.0.0.1:{{bench_surreal_port}}/health 30
-    @echo "In the explorer: ws://127.0.0.1:{{bench_surreal_port}}, namespace canton, database ticket_bench, root / root (just stop stops it)"
+    @echo "▶ Opening the explorer on the benchmark's ledger (Graph tab) and its tables (Dashboard tab); just stop stops both"
+    @"{{svc}}" stop dashboard > /dev/null
+    @just _dashboard "{{analytics}}/bench-surreal-tables" ws://127.0.0.1:{{bench_surreal_port}} ticket_bench
+
+# The dashboard-enabled explorer on a tables folder and a database ("" for none), in the background
+_dashboard tables server database:
+    @mkdir -p "{{analytics}}/explorer" "{{tables}}"
+    @sed -e "s#ws://127.0.0.1:8001#{{server}}#" -e 's#^database = "ticket_purchase"#database = "{{database}}"#' \
+        config/explorer.toml > "{{analytics}}/explorer/config.toml"
+    @printf '\n[analytics]\nlocation = "%s"\n' "$(cd "{{tables}}" && pwd)" >> "{{analytics}}/explorer/config.toml"
+    @"{{svc}}" start dashboard "{{analytics}}/explorer" "{{analytics_bin}}/surrealdb-explorer"
