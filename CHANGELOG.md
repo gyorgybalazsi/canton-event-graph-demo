@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes it, times the daemon's catch-up from offset 0, and times the same
   per-day and per-week numbers in SurrealQL and in DataFusion, checking that
   they agree on the agreements and the value of every day and week.
+- A skill, `adapt-analytics-plugins` (in `.claude/skills`, in the Agent
+  Skills format), that guides a coding agent through adapting the ticket
+  analytics plugins to another Daml model: the event and measures, the
+  query over the syncer's records, the new plugin crates and their tests.
 
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved
