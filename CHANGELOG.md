@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at `bdb8852` and the explorer's dashboard at `f51d815`, with fewer tick
   labels, abbreviated numbers, fainter major gridlines, no minor gridlines,
   darker chart axes and dashboard settings for the daemon's lag.
+- The analytics explorer pin moves to `b533d93` (explorer main), which adds
+  the Canton items to the record menu (lifecycle, show in table, filters,
+  more copies) and copying or saving a picture of the whole graph canvas.
 
 ## [0.1.0] - 2026-11-23
 
