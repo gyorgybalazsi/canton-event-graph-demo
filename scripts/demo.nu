@@ -17,9 +17,13 @@
 
 const services = [sandbox surreal syncer explorer analytics dashboard bench-surreal]
 
-def root [] { $env.FILE_PWD | path dirname }
-def log-file [name: string] { root | path join .demo logs $"($name).log" }
-def pid-file [name: string] { root | path join .demo run $"($name).pid" }
+# The repository: this file's folder's parent, fixed when the script is parsed.
+const root = path self ..
+const logs = ($root | path join .demo logs)
+const run = ($root | path join .demo run)
+
+def log-file [name: string] { $logs | path join $"($name).log" }
+def pid-file [name: string] { $run | path join $"($name).pid" }
 
 def die [message: string] {
     print -e $"error: ($message)"
@@ -69,15 +73,18 @@ def log-contains [name: string, text: string] {
     ($file | path exists) and (open --raw $file | decode utf-8 | str contains $text)
 }
 
-# Usage: see the top of this file.
+# The demo's background services; `nu scripts/demo.nu --help` lists the commands.
 def main [] {
-    print -e "usage: nu scripts/demo.nu start|wait-log|wait-http|stop|status|running|listening|check-port|sql ..."
-    exit 1
+    help main
 }
 
 # Runs a command in <dir> in the background, detached from this shell.
-def --wrapped "main start" [name: string, dir: string, ...command: string] {
-    mkdir (root | path join .demo logs) (root | path join .demo run)
+@category service
+@example "start SurrealDB" { nu scripts/demo.nu start surreal . surreal db start --bind 127.0.0.1:8001 memory }
+def --wrapped "main start" [name: string, dir: string, ...args] {
+    # Arguments that look like numbers or booleans arrive typed: back to text.
+    let command = ($args | each { into string })
+    mkdir $logs $run
     if (is-running $name) {
         print $"($name) is already running \(pid (pid-of $name)\)"
         return
@@ -90,6 +97,8 @@ def --wrapped "main start" [name: string, dir: string, ...command: string] {
 }
 
 # Waits until the service's log contains the text.
+@category service
+@example "wait for the sandbox" { nu scripts/demo.nu wait-log sandbox "Canton sandbox is ready." 180 }
 def "main wait-log" [name: string, text: string, seconds: int] {
     for _ in 1..$seconds {
         if (log-contains $name $text) { return }
@@ -104,6 +113,7 @@ def "main wait-log" [name: string, text: string, seconds: int] {
 }
 
 # Waits until the URL answers.
+@category service
 def "main wait-http" [name: string, url: string, seconds: int] {
     for _ in 1..$seconds {
         let up = (try { http get $url | ignore; true } catch { false })
@@ -119,6 +129,7 @@ def "main wait-http" [name: string, url: string, seconds: int] {
 
 # Stops a service and waits until all its processes have exited, so its ports
 # are free when this returns (the sandbox's JVM takes a few seconds).
+@category service
 def "main stop" [name: string] {
     if (is-running $name) {
         let pids = (tree (pid-of $name))
@@ -140,6 +151,7 @@ def "main stop" [name: string] {
 }
 
 # Which services run, as a table.
+@category service
 def "main status" [] {
     $services | each {|name|
         let running = (is-running $name)
@@ -147,15 +159,21 @@ def "main status" [] {
     } | print
 }
 
+# Exits with 1 unless the service runs.
+@category service
 def "main running" [name: string] {
     if not (is-running $name) { exit 1 }
 }
 
+# Exits with 1 unless something listens on 127.0.0.1:<port>.
+@category port
 def "main listening" [port: int] {
     if not (is-listening $port) { exit 1 }
 }
 
 # Fails when something other than the named service listens on the port.
+@category port
+@example "before starting SurrealDB" { nu scripts/demo.nu check-port 8001 surreal "set DEMO_SURREAL_PORT" }
 def "main check-port" [port: int, name: string, hint: string] {
     if (is-listening $port) and not (is-running $name) {
         die $"something else already listens on port ($port) \(($hint)\)"
@@ -164,6 +182,8 @@ def "main check-port" [port: int, name: string, hint: string] {
 
 # Runs SurrealQL as root and prints the statements' results as JSON; fails on
 # an error in any statement.
+@category surrealdb
+@example "count the transactions" { nu scripts/demo.nu sql --url http://127.0.0.1:8001 --pass root "USE NS canton DB ticket_purchase; RETURN count(SELECT * FROM transaction);" }
 def "main sql" [query: string, --url: string, --pass: string] {
     let results = (
         http post --user root --password $pass --headers {Accept: application/json}

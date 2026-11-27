@@ -331,12 +331,12 @@ analytics-bench-surreal rows="1000000": analytics-plugins
     rm -rf '{{analytics}}/bench-surreal' '{{analytics}}/bench-surreal-tables'
     {{build}} "the benchmark" cargo build --release -p ticket-bench
     just _bench-surreal
-    let ok = (try {
+    # The benchmark's SurrealDB stops whether the run passes or fails.
+    try {
         cargo run --quiet --release -p ticket-bench -- surreal --url ws://127.0.0.1:{{bench_surreal_port}} --pass {{surreal_root_pass}} --rows {{rows}} --tables '{{analytics}}/bench-surreal-tables' '{{plugins}}/ticket_agreements.wasm' '{{plugins}}/ticket_value.wasm'
-        true
-    } catch { false })
-    {{svc}} stop bench-surreal | ignore
-    if not $ok { exit 1 }
+    } finally {
+        {{svc}} stop bench-surreal | ignore
+    }
     print "Browse its ledger and tables with: just analytics-tools && just analytics-bench-surreal-db"
 
 # Start the last benchmark's SurrealDB again and open the explorer on it: its ledger in the Graph tab, its tables in the Dashboard tab

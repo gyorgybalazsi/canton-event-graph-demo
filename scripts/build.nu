@@ -57,13 +57,17 @@ def update [state: record, lines: list<string>] {
     }
 }
 
-def --wrapped main [label: string, ...command: string] {
-    let logs = ($env.FILE_PWD | path dirname | path join .demo logs)
+# The repository: this file's folder's parent, fixed when the script is parsed.
+const root = path self ..
+
+@example "install the syncer at its release tag" { nu scripts/build.nu "syncer v0.1.0" cargo install --locked --git https://github.com/gyorgybalazsi/canton-event-graph-syncer --tag v0.1.0 syncer }
+def --wrapped main [label: string, ...args] {
+    # Arguments that look like numbers or booleans arrive typed: back to text.
+    let command = ($args | each { into string })
+    let logs = ($root | path join .demo logs)
     mkdir $logs
     let log = ($logs | path join build.log)
-    let status_file = ($logs | path join build.status)
     "" | save -f $log
-    rm -f $status_file
 
     # Cargo's own progress bar and colours would garble the line and the log.
     $env.CARGO_TERM_COLOR = "never"
@@ -71,16 +75,19 @@ def --wrapped main [label: string, ...command: string] {
     let tty = (is-terminal --stderr)
     let start = (date now)
 
-    # The build runs as a background job writing to the log; this loop polls
-    # the log twice a second, so the clock moves on during a long link too.
-    let job = (job spawn {
+    # The build runs as a background job writing to the log and mails its exit
+    # code to this thread (job 0) when it ends. Until then this loop reads the
+    # log twice a second, so the clock moves on during a long link too.
+    job spawn --auto-kill --description $label {
         let code = (try { ^($command | first) ...($command | skip 1) o+e> $log; 0 } catch {|err| $err.exit_code? | default 1 })
-        $code | into string | save -f $status_file
-    })
+        {exit_code: $code} | job send 0
+    } | ignore
 
     mut state = {phase: "starting", crates: 0, current: "", seen: 0, said: ""}
+    mut code: any = null
     loop {
-        let done = ($status_file | path exists)
+        $code = (try { job recv --timeout 500ms | get exit_code } catch { null })
+        let done = $code != null
         let lines = (open --raw $log | decode utf-8 | lines)
         let new = ($lines | skip $state.seen)
         let before = $state.crates
@@ -96,19 +103,16 @@ def --wrapped main [label: string, ...command: string] {
             $state = ($state | merge {said: $state.phase})
         }
         if $done { break }
-        sleep 500ms
     }
     if $tty { print -e -n "\r\e[K" }
 
-    let code = (open --raw $status_file | decode utf-8 | str trim | into int)
-    rm -f $status_file
     if $code != 0 {
         print -e $"✗ ($label) failed after (elapsed $start). The end of .demo/logs/build.log, without the progress lines:"
         let errors = (open --raw $log | decode utf-8 | lines
             | where {|line| (phase-of $line) == null or $line =~ 'error|warning' }
             | last 30 | str join "\n")
         print -e $errors
-        exit $code
+        exit ($code | into int)
     }
     if $state.crates > 0 {
         print -e $"✓ ($label): built in (elapsed $start) \((crates $state.crates)\)"
