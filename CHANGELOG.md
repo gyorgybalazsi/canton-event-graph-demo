@@ -62,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `just analytics-bench-surreal` ends by pointing only at
   `just analytics-bench-surreal-db`, which opens the tables and the ledger
   behind them, so clicking a column works.
+- `just tools` and `just analytics-tools` print a line only for a tool they
+  actually install, saying it builds from source and takes a few minutes;
+  when everything is installed they print nothing.
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.

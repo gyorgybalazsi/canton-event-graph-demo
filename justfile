@@ -46,6 +46,8 @@ quiet := "{ grep -v -e 'Ignored package' -e 'is already installed' -e 'toolchain
 # Whether cargo's install record in .demo matches a pattern (a tool at the pinned
 # tag, or the explorer installed from a local clone, is not fetched again).
 installed := "grep -qsE"
+# Said when a tool is missing, since cargo install runs quietly.
+building := "(builds from source: a few minutes, with no output until it is done)"
 
 # List the recipes
 default:
@@ -65,15 +67,18 @@ demo-reset: stop
 
 # Install the syncer, the code generator and the explorer into .demo/bin (skips what is already installed)
 tools:
-    @echo "▶ Installing syncer, daml-rust-codegen and surrealdb-explorer (pinned versions)"
     @mkdir -p "{{bin}}"
-    @{{installed}} "syncer .*tag={{syncer_tag}}" "{{demo}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --tag {{syncer_tag}} syncer 2>&1 | {{quiet}}
-    @{{installed}} "daml-rust-codegen .*tag={{codegen_tag}}" "{{demo}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --tag {{codegen_tag}} daml-rust-codegen 2>&1 | {{quiet}}
+    @{{installed}} "syncer .*tag={{syncer_tag}}" "{{demo}}/.crates.toml" || { \
+        echo "▶ Installing syncer {{syncer_tag}} {{building}}"; \
+        cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --tag {{syncer_tag}} syncer 2>&1 | {{quiet}}; }
+    @{{installed}} "daml-rust-codegen .*tag={{codegen_tag}}" "{{demo}}/.crates.toml" || { \
+        echo "▶ Installing daml-rust-codegen {{codegen_tag}} {{building}}"; \
+        cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --tag {{codegen_tag}} daml-rust-codegen 2>&1 | {{quiet}}; }
     @if [[ -n "{{explorer_path}}" ]]; then \
+        echo "▶ Installing surrealdb-explorer from {{explorer_path}} {{building}}"; \
         cargo install --quiet --locked --force --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
     elif ! {{installed}} "surrealdb-explorer .*(tag={{explorer_tag}}|path\+)" "{{demo}}/.crates.toml"; then \
+        echo "▶ Installing surrealdb-explorer {{explorer_tag}} {{building}}"; \
         cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --tag {{explorer_tag}} surrealdb-explorer 2>&1 | {{quiet}}; \
     fi
 
@@ -210,13 +215,14 @@ _sql query:
 
 # Install canton-analytics and a dashboard-enabled explorer into .demo/analytics/bin (skips what is already installed)
 analytics-tools:
-    @echo "▶ Installing canton-analytics and the explorer with its dashboard (pinned commits)"
     @mkdir -p "{{analytics_bin}}"
-    @{{installed}} "canton-analytics .*#{{analytics_rev}}" "{{analytics}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{analytics}}" --git {{syncer_git}} --rev {{analytics_rev}} canton-analytics 2>&1 | {{quiet}}
-    @{{installed}} "surrealdb-explorer .*#{{explorer_dashboard_rev}}" "{{analytics}}/.crates.toml" || \
+    @{{installed}} "canton-analytics .*#{{analytics_rev}}" "{{analytics}}/.crates.toml" || { \
+        echo "▶ Installing canton-analytics at {{analytics_rev}} {{building}}"; \
+        cargo install --quiet --locked --root "{{analytics}}" --git {{syncer_git}} --rev {{analytics_rev}} canton-analytics 2>&1 | {{quiet}}; }
+    @{{installed}} "surrealdb-explorer .*#{{explorer_dashboard_rev}}" "{{analytics}}/.crates.toml" || { \
+        echo "▶ Installing the explorer with its dashboard at {{explorer_dashboard_rev}} {{building}}"; \
         cargo install --quiet --locked --root "{{analytics}}" --git {{explorer_git}} --rev {{explorer_dashboard_rev}} \
-            --features dashboard surrealdb-explorer 2>&1 | {{quiet}}
+            --features dashboard surrealdb-explorer 2>&1 | {{quiet}}; }
 
 # Build the ticket analytics plugins (WebAssembly) into .demo/analytics/plugins
 analytics-plugins:
