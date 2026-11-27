@@ -30,6 +30,7 @@ use std::time::Instant;
 
 use analytics_reader::frame::Frame;
 use analytics_reader::location::Location;
+use analytics_reader::manifest::PanelKind;
 use analytics_reader::{Session, dashboard};
 use anyhow::{Context, Result, bail, ensure};
 use canton_analytics::fetch::Fetcher;
@@ -557,15 +558,25 @@ async fn head_to_head(db: &Db, tables: &Location, rows: i64) -> Result<()> {
             .into_iter()
             .zip(&from_surreal)
         {
-            let started = Instant::now();
             let board = dashboard::load_with(&session, period).await?;
-            let millis = started.elapsed().as_millis();
-            let panel = board.panels.first().context("no panel")?;
+            // The chart, timed on its own: the headline figures above it
+            // are another query.
+            let panel = board
+                .panels
+                .iter()
+                .find(|p| p.panel.kind == PanelKind::Bar)
+                .context("no chart")?;
             let frame = panel.frame.as_ref().map_err(|e| anyhow::anyhow!("{e}"))?;
             println!(
-                "  DataFusion, {table} per {period:?}: {millis:>4} ms ({} rows)",
+                "  DataFusion, {table} per {period:?}: {:>4} ms ({} rows)",
+                panel.millis,
                 frame.rows()
             );
+            for other in board.panels.iter().filter(|p| p.panel.kind != PanelKind::Bar) {
+                if let Err(e) = &other.frame {
+                    bail!("{table}: the panel {} failed: {e}", other.panel.title);
+                }
+            }
             let ours = periods(frame, column)?;
             let theirs: Vec<(i64, f64)> = surreal
                 .iter()
@@ -600,12 +611,13 @@ fn periods(frame: &Frame, column: &str) -> Result<Vec<(i64, f64)>> {
         .collect())
 }
 
-/// Equal periods and amounts; values may differ by rounding in the sums.
+/// Equal periods and amounts; the chart shows value in whole units, and sums
+/// may differ in their last digits.
 fn same(a: &[(i64, f64)], b: &[(i64, f64)]) -> bool {
     a.len() == b.len()
         && a.iter()
             .zip(b)
-            .all(|(x, y)| x.0 == y.0 && (x.1 - y.1).abs() <= 0.005 + 1e-9 * y.1.abs())
+            .all(|(x, y)| x.0 == y.0 && (x.1 - y.1).abs() <= 0.5 + 1e-9 * y.1.abs())
 }
 
 fn first_difference(a: &[(i64, f64)], b: &[(i64, f64)]) -> String {
