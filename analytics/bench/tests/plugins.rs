@@ -124,18 +124,28 @@ fn ticket_plugins_read_the_syncers_purchases() {
                     ["1793577600000000"],
                     "{table}: 2026-11-02T00:00Z"
                 );
-                // One chart: a column per day (or week) with its amount.
+                // Headline figures, then a chart: a column per day (or week)
+                // with its amount and the offsets a click opens.
                 let board = dashboard::load(&session).await.unwrap();
-                assert_eq!(board.panels.len(), 1);
-                let chart = board.panels[0].frame.as_ref().unwrap();
-                assert_eq!(numbers(chart, column), [Some(total)], "{table}");
+                assert_eq!(board.panels.len(), 2);
+                let stats = board.panels[0].frame.as_ref().unwrap();
+                assert_eq!(
+                    numbers(stats, "total since the start"),
+                    [Some(total.round())],
+                    "{table}"
+                );
+                let chart = board.panels[1].frame.as_ref().unwrap();
+                assert_eq!(numbers(chart, column), [Some(total.round())], "{table}");
+                // The two accepts are at offsets 3 and 5.
+                assert_eq!(numbers(chart, "first_offset"), [Some(3.0)], "{table}");
+                assert_eq!(numbers(chart, "last_offset"), [Some(5.0)], "{table}");
                 // The same by week, as the dashboard's Week switch asks.
                 let board = dashboard::load_with(&session, dashboard::Period::Week)
                     .await
                     .unwrap();
-                assert_eq!(board.panels[0].bucket_seconds, Some(7 * 86_400));
-                let chart = board.panels[0].frame.as_ref().unwrap();
-                assert_eq!(numbers(chart, column), [Some(total)], "{table}");
+                assert_eq!(board.panels[1].bucket_seconds, Some(7 * 86_400));
+                let chart = board.panels[1].frame.as_ref().unwrap();
+                assert_eq!(numbers(chart, column), [Some(total.round())], "{table}");
             }
         })
         .await
