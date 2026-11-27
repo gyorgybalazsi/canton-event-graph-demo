@@ -9,7 +9,13 @@ The plugins in `analytics/plugins` turn the event graph that the syncer
 writes into SurrealDB into small Delta Lake tables, and say which charts the
 explorer's **Dashboard** tab draws from them. They are written for the ticket
 model in `daml/daml/Main.daml`: they count each accepted `TicketOffer`
-(its `Accept` choice) per day, and add up the offers' prices.
+(its `Accept` choice) per day, and add up the offers' prices. Each
+dashboard has headline figures (last full week, the week before, the
+change, best week, total) above a column chart, and a click on a column
+opens that day's or week's transactions in the explorer's Graph tab. The
+click works because each day's row keeps the ledger offsets of its first and
+last event (`first_offset`, `last_offset`); an adapted plugin must keep them
+too.
 
 Adapting them to another model means changing four things, and nothing else:
 
@@ -115,16 +121,25 @@ model (below, `loan` stands for it):
 2. In `loan-totals/src/lib.rs`, change exactly the places listed in
    [references/ticket-plugins.md](references/ticket-plugins.md): `QUERY`,
    `input_schema`, the function that reads the query's rows, `Measure`
-   (variants, columns, types), `Spec::description`, `Spec::chart_title`,
-   the per-key state struct and its `load_state`/`save_state` encoding, and
-   the unit tests.
+   (variants, columns, types, and `whole()` for how a figure is rounded),
+   `Spec::description`, `Spec::headline_title`, `Spec::chart_title`, the
+   per-key state struct and its `load_state`/`save_state` encoding, and the
+   unit tests. Keep `offset` in the query and the offsets in the state.
 3. If the key gains a dimension, change `mode()` in the macro to
    `WriteMode::Merge(vec![DAY.into(), "<dimension>".into()])`, add the
    column to `output_schema`, key the state map on `(day, dimension)`, and
    fill quiet days per dimension that already has a row.
-4. Panels: one chart per plugin is the default. Keep `{period}` and the
-   Monday origin `TIMESTAMP '2001-01-01T00:00:00Z'` so the Day / Week switch
-   works. Panel kinds and their columns are in the WIT file: `bar`
+4. Panels: each plugin has a `stats` panel of headline figures and a `bar`
+   chart. Their SQL (`Spec::headline_sql`, `Spec::chart_sql`) is generic and
+   usually only needs the titles changed. Keep:
+   - `{period}` and the Monday origin `TIMESTAMP '2001-01-01T00:00:00Z'`,
+     so the Day / Week switch works, and `{period_name}` (`day` or `week`)
+     in the headline column names;
+   - `min(first_offset) AS first_offset, max(last_offset) AS last_offset`
+     in the chart's SQL. The explorer reads those two columns by name to
+     open a column's transactions in the Graph tab, and doesn't draw them.
+     Drop them and the click-through stops working.
+   Panel kinds and their columns are in the WIT file: `bar`
    `(label, value)`, `timeseries` `(time, value)` or
    `(time, value, series)` for a breakdown, `stats` one row, `table` any.
    The table's SQL name is the plugin name with `-` as `_`.
@@ -148,9 +163,10 @@ Keep these properties, which the daemon relies on:
 ## Step 4: Test
 
 1. Host unit tests: `cd analytics/plugins && cargo test -p loan-totals`.
-   Adapt the ticket tests: days add up, quiet days get a 0, the state
-   survives `save_state`/`load_state`, a wrong column type is an error that
-   leaves the state empty, an empty step writes nothing.
+   Adapt the ticket tests: days add up, quiet days get a 0, each day keeps
+   its first and last offset (quiet days none), the state survives
+   `save_state`/`load_state`, a wrong column type is an error that leaves
+   the state empty, an empty step writes nothing.
 2. Build the components: `cd analytics/plugins && cargo build --release
    --target wasm32-wasip2` (needs `rustup target add wasm32-wasip2`).
 3. End to end: `analytics/bench` runs the ticket plugins through the real
@@ -164,7 +180,8 @@ Keep these properties, which the daemon relies on:
 4. Live: run the daemon on the syncer's database with the new `.wasm` files
    (see the canton-analytics README for `canton-analytics run` and its
    `SURREAL_*` variables; in this repo `just analytics` does it for the
-   demo's ledger) and open the dashboard.
+   demo's ledger) and open the dashboard. Click a column and check that the
+   Graph tab shows the events you counted.
 
 If the query or the output schema of a table that already exists changes,
 stop the daemon and delete that plugin's table folder before running it
@@ -175,7 +192,8 @@ again: the table keeps its old rows, columns and cursor otherwise.
 - The query was tried on data and returns the expected rows and types.
 - `cargo test` passes for the new totals crate, and the workspace builds for
   `wasm32-wasip2`.
-- Each new plugin has a dashboard panel whose SQL names its table.
+- Each new plugin has its headline and chart panels, whose SQL names its
+  table, and its chart returns `first_offset` and `last_offset`.
 - The justfile and the README list the new plugins.
 - The summary to the person names the event, the measures, the key and any
   events that are not counted (for example contracts loaded from the ACS).

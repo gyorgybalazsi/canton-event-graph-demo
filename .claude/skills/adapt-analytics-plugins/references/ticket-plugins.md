@@ -22,18 +22,21 @@ per measure.
 | `plugin!` macro | No, except `mode()` | Keep it. Change `mode()` only if the key changes, and `PanelKind`/`time_column` only if the chart's kind changes. The `path: "../../wit"` assumes the crate sits next to the ticket ones. |
 | `HIGH_WATER` | No | Keep as is. |
 | `DAY_US`, `DAY`, `day_start` | No | Keep. `DAY` (`day_start`) is the key column and the chart's time column. |
-| `Measure` | Yes | One variant per measure. `column()` names the output column, `data_type()` gives its Arrow type (`Int64` for counts, `Float64` for sums). |
+| `FIRST_OFFSET`, `LAST_OFFSET` | No | Keep. The explorer finds a chart column's transactions by these column names. |
+| `Measure` | Yes | One variant per measure. `column()` names the output column, `data_type()` gives its Arrow type (`Int64` for counts, `Float64` for sums), `whole()` says how the dashboard rounds it (money as `round(..)`). |
 | `Spec::description` | Yes | The plugin's one-line description, shown in the catalog. |
-| `Spec::chart_title` | Yes | The panel's title. |
-| `Spec::chart_sql` | No | Keep: it already uses the measure's column and the table name. Change it to add a breakdown (`GROUP BY 1, <dimension>`) or another panel. |
-| `Spec::output_schema` | Partly | `day_start` plus the measure. Add a dimension column if the key gets one. |
+| `Spec::headline_title`, `Spec::chart_title` | Yes | The two panels' titles. |
+| `Spec::headline_sql` | No | Keep: last full period, the one before, the change, newest so far, best, total, named with `{period_name}`. Change only to drop or add a figure. |
+| `Spec::chart_sql` | No | Keep: it already uses the measure's column, the table name, and returns `first_offset`/`last_offset` per column for the click-through. Change it to add a breakdown (`GROUP BY 1, <dimension>`) or another panel. |
+| `Spec::table` | No | Keep: the plugin name with `-` as `_`. |
+| `Spec::output_schema` | Partly | `day_start`, the measure, `first_offset`, `last_offset`. Add a dimension column if the key gets one. |
 | `input_schema` | Yes | One field per column the query returns, by its `AS` name, with the type from `references/event-graph.md`. |
 | `ipc`, `timestamp` | No | Keep. |
-| `Day` struct, `DAYS` | Yes | The running totals per key: one field per measure. Key the `BTreeMap` on `(i64, String)` for a dimension. |
-| `load_state`, `save_state` | Yes | Encode the new state; keep the encoding sorted and stable (a `Vec` of tuples from the `BTreeMap`, as now). |
-| `agreements` | Yes | Reads the query's rows from Arrow. Rename it after the event; read each column by name with the right `as_primitive_opt::<..>()` / `as_string_opt::<i32>()`, and decide what a null means (skip the row, or count it as 0). |
+| `Day` struct, `DAYS` | Yes | The running totals per key: one field per measure, plus `offsets` (first and last). Key the `BTreeMap` on `(i64, String)` for a dimension. |
+| `SavedDay`, `load_state`, `save_state` | Yes | Encode the new state, offsets included; keep the encoding sorted and stable (a `Vec` of tuples from the `BTreeMap`, as now). |
+| `agreements` | Yes | Reads the query's rows from Arrow, `offset` first. Rename it after the event; read each column by name with the right `as_primitive_opt::<..>()` / `as_string_opt::<i32>()`, and decide what a null means (skip the row, or count it as 0). A row without an offset or a time is skipped. |
 | `column` | Mostly | Change the "accepted offers" wording in its error. |
-| `transform` | Partly | Keep the shape: check `results.len()`, read all rows first, then update the state, then emit every key from the earliest touched day to the newest, quiet days as 0. Change the per-row update and the per-measure builders. |
+| `transform` | Partly | Keep the shape: check `results.len()`, read all rows first, then update the state (widening the day's offsets), then emit every key from the earliest touched day to the newest, quiet days as 0 with null offsets. Change the per-row update and the per-measure builders. |
 | `tests` | Yes | Same cases with the new columns (SKILL.md, step 4). |
 
 ## Elsewhere in the repo
