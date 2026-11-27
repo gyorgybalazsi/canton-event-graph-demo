@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   click on a column in the explorer shows that day's or week's transactions.
   The tables gained two columns: remove tables written by an earlier version
   (`just demo-reset`, or a fresh `just demo` with SurrealDB stopped).
+- A skill, `adapt-analytics-plugins` (in `.claude/skills`, in the Agent
+  Skills format), that guides a coding agent through adapting the ticket
+  analytics plugins to another Daml model: the event and measures, the
+  query over the syncer's records, the new plugin crates and their tests.
 
 ### Fixed
 - `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved

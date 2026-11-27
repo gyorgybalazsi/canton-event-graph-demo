@@ -247,6 +247,19 @@ the shape the syncer writes them, through the daemon, and checks the tables
 and both charts by day and by week. `cd analytics/plugins && cargo test -p
 ticket-totals` tests the per-day totals on their own.
 
+**Other Daml models.** The plugins are written for the ticket model, but only
+a few parts of them are: the SurrealQL query that picks the events, the
+columns it reads, the totals kept per day, and the chart's title. The skill
+in [`.claude/skills/adapt-analytics-plugins`](.claude/skills/adapt-analytics-plugins/SKILL.md)
+walks a coding agent through changing those for another model: choosing
+the business event and the numbers to chart, writing and trying the query
+against the syncer's records, making new plugin crates next to the ticket
+ones, and testing them through the daemon. Claude Code picks it up from
+`.claude/skills` on its own (ask it to "adapt the analytics plugins to my
+model"). The skill is a plain folder in the open Agent Skills format (a
+`SKILL.md` with its references), so other agents that read that format can
+use it too, and a person can follow it as a checklist.
+
 ## Layout
 
 | Path | Contents |
@@ -255,6 +268,7 @@ ticket-totals` tests the per-day totals on their own.
 | `app/` | The Rust client. `build.rs` runs `daml-rust-codegen` on the DAR, and `src/model.rs` includes the output, so the types always match the model |
 | `config/` | The syncer's and the explorer's settings for the demo |
 | `analytics/` | The ticket analytics plugins (`plugins/`, a workspace of its own built for `wasm32-wasip2`), the plugin interface they build against (`wit/`, a copy of the syncer's), and the benchmark (`bench/`) |
+| `.claude/skills/` | A skill for adapting the analytics plugins to another Daml model |
 | `scripts/demo.sh` | Starts, waits for and stops the background services |
 | `justfile` | The recipes, and the pinned tags of the tools |
 
