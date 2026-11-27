@@ -24,6 +24,8 @@ explorer_path := env("EXPLORER_PATH", "")
 demo := justfile_directory() / ".demo"
 bin := demo / "bin"
 svc := justfile_directory() / "scripts/demo.sh"
+# Runs a build with one progress line instead of cargo's full output.
+build := justfile_directory() / "scripts/build.sh"
 dar := justfile_directory() / "daml/.daml/dist/ticket-purchase-0.1.0.dar"
 
 analytics := demo / "analytics"
@@ -41,13 +43,9 @@ surreal_root_pass := "root"
 syncer_pass := "syncer"
 # Seconds `just demo` waits after each transaction of the first, guided purchase.
 guided_pause := env("DEMO_PAUSE", "4")
-# Hides cargo's "already installed" and toolchain notes; real errors still show.
-quiet := "{ grep -v -e 'Ignored package' -e 'is already installed' -e 'toolchain' -e '^$' >&2 || true; }"
 # Whether cargo's install record in .demo matches a pattern (a tool at the pinned
 # tag, or the explorer installed from a local clone, is not fetched again).
 installed := "grep -qsE"
-# Said when a tool is missing, since cargo install runs quietly.
-building := "(builds from source: a few minutes, with no output until it is done)"
 
 # List the recipes
 default:
@@ -68,18 +66,14 @@ demo-reset: stop
 # Install the syncer, the code generator and the explorer into .demo/bin (skips what is already installed)
 tools:
     @mkdir -p "{{bin}}"
-    @{{installed}} "syncer .*tag={{syncer_tag}}" "{{demo}}/.crates.toml" || { \
-        echo "▶ Installing syncer {{syncer_tag}} {{building}}"; \
-        cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --tag {{syncer_tag}} syncer 2>&1 | {{quiet}}; }
-    @{{installed}} "daml-rust-codegen .*tag={{codegen_tag}}" "{{demo}}/.crates.toml" || { \
-        echo "▶ Installing daml-rust-codegen {{codegen_tag}} {{building}}"; \
-        cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --tag {{codegen_tag}} daml-rust-codegen 2>&1 | {{quiet}}; }
+    @{{installed}} "syncer .*tag={{syncer_tag}}" "{{demo}}/.crates.toml" || \
+        "{{build}}" "syncer {{syncer_tag}}" cargo install --locked --root "{{demo}}" --git {{syncer_git}} --tag {{syncer_tag}} syncer
+    @{{installed}} "daml-rust-codegen .*tag={{codegen_tag}}" "{{demo}}/.crates.toml" || \
+        "{{build}}" "daml-rust-codegen {{codegen_tag}}" cargo install --locked --root "{{demo}}" --git {{codegen_git}} --tag {{codegen_tag}} daml-rust-codegen
     @if [[ -n "{{explorer_path}}" ]]; then \
-        echo "▶ Installing surrealdb-explorer from {{explorer_path}} {{building}}"; \
-        cargo install --quiet --locked --force --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
+        "{{build}}" "surrealdb-explorer from {{explorer_path}}" cargo install --locked --force --root "{{demo}}" --path "{{explorer_path}}"; \
     elif ! {{installed}} "surrealdb-explorer .*(tag={{explorer_tag}}|path\+)" "{{demo}}/.crates.toml"; then \
-        echo "▶ Installing surrealdb-explorer {{explorer_tag}} {{building}}"; \
-        cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --tag {{explorer_tag}} surrealdb-explorer 2>&1 | {{quiet}}; \
+        "{{build}}" "surrealdb-explorer {{explorer_tag}}" cargo install --locked --root "{{demo}}" --git {{explorer_git}} --tag {{explorer_tag}} surrealdb-explorer; \
     fi
 
 # Build the ticket purchase DAR (needs the Daml SDK's dpm)
@@ -115,6 +109,7 @@ surreal:
 # Upload the DAR and allocate Alice, TicketWizard and ScroogeBank
 setup:
     @echo "▶ Uploading the model and allocating Alice, TicketWizard and ScroogeBank"
+    @"{{build}}" "the ticket purchase app" cargo build -p ticket-purchase
     @cargo run --quiet -p ticket-purchase -- setup --dar "{{dar}}"
 
 # Start the syncer in the background, following every party on the sandbox
@@ -216,20 +211,18 @@ _sql query:
 # Install canton-analytics and a dashboard-enabled explorer into .demo/analytics/bin (skips what is already installed)
 analytics-tools:
     @mkdir -p "{{analytics_bin}}"
-    @{{installed}} "canton-analytics .*#{{analytics_rev}}" "{{analytics}}/.crates.toml" || { \
-        echo "▶ Installing canton-analytics at {{analytics_rev}} {{building}}"; \
-        cargo install --quiet --locked --root "{{analytics}}" --git {{syncer_git}} --rev {{analytics_rev}} canton-analytics 2>&1 | {{quiet}}; }
-    @{{installed}} "surrealdb-explorer .*#{{explorer_dashboard_rev}}" "{{analytics}}/.crates.toml" || { \
-        echo "▶ Installing the explorer with its dashboard at {{explorer_dashboard_rev}} {{building}}"; \
-        cargo install --quiet --locked --root "{{analytics}}" --git {{explorer_git}} --rev {{explorer_dashboard_rev}} \
-            --features dashboard surrealdb-explorer 2>&1 | {{quiet}}; }
+    @{{installed}} "canton-analytics .*#{{analytics_rev}}" "{{analytics}}/.crates.toml" || \
+        "{{build}}" "canton-analytics at {{analytics_rev}}" cargo install --locked --root "{{analytics}}" --git {{syncer_git}} --rev {{analytics_rev}} canton-analytics
+    @{{installed}} "surrealdb-explorer .*#{{explorer_dashboard_rev}}" "{{analytics}}/.crates.toml" || \
+        "{{build}}" "explorer with its dashboard at {{explorer_dashboard_rev}}" cargo install --locked --root "{{analytics}}" \
+            --git {{explorer_git}} --rev {{explorer_dashboard_rev}} --features dashboard surrealdb-explorer
 
 # Build the ticket analytics plugins (WebAssembly) into .demo/analytics/plugins
 analytics-plugins:
     @echo "▶ Building the ticket analytics plugins"
-    @rustup target add wasm32-wasip2 2>&1 | {{quiet}}
+    @"{{build}}" "the wasm32-wasip2 target" rustup target add wasm32-wasip2
     @mkdir -p "{{plugins}}"
-    @cd analytics/plugins && cargo build --quiet --locked --release --target wasm32-wasip2
+    @cd analytics/plugins && "{{build}}" "the plugins" cargo build --locked --release --target wasm32-wasip2
     @for p in ticket_agreements ticket_value; do \
         cp analytics/plugins/target/wasm32-wasip2/release/$p.wasm "{{plugins}}/"; \
     done
@@ -259,6 +252,7 @@ analytics-dashboard tables=(analytics / "tables"):
 # Benchmark A: write the plugins' tables for a made-up ledger (default 10 million offsets) and time the dashboards
 analytics-bench rows="10000000": analytics-plugins
     @rm -rf "{{analytics}}/bench-tables"
+    @"{{build}}" "the benchmark" cargo build --release -p ticket-bench
     cargo run --quiet --release -p ticket-bench -- table --tables "{{analytics}}/bench-tables" --rows {{rows}} \
         "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"
     @echo "Look at them with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-tables"
@@ -273,6 +267,7 @@ analytics-bench-surreal rows="1000000": analytics-plugins
         echo "error: something already listens on port {{bench_surreal_port}}; set DEMO_BENCH_SURREAL_PORT" >&2; exit 1; \
     fi
     @rm -rf "{{analytics}}/bench-surreal" "{{analytics}}/bench-surreal-tables"
+    @"{{build}}" "the benchmark" cargo build --release -p ticket-bench
     @just _bench-surreal
     @cargo run --quiet --release -p ticket-bench -- surreal --url ws://127.0.0.1:{{bench_surreal_port}} --pass {{surreal_root_pass}} \
         --rows {{rows}} --tables "{{analytics}}/bench-surreal-tables" \

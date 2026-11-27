@@ -62,9 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `just analytics-bench-surreal` ends by pointing only at
   `just analytics-bench-surreal-db`, which opens the tables and the ledger
   behind them, so clicking a column works.
-- `just tools` and `just analytics-tools` print a line only for a tool they
-  actually install, saying it builds from source and takes a few minutes;
-  when everything is installed they print nothing.
+- Builds show where they are instead of going quiet for minutes: each tool
+  install, the app, the plugins and the benchmark get one line that updates
+  in place (phase, crates compiled, the crate being compiled, elapsed time) and
+  ends with a ✓ line. A build with nothing to do prints nothing, and a failed
+  one prints the errors from its log (`.demo/logs/build.log`).
+  `scripts/build.sh` does this.
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.

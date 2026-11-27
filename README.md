@@ -120,8 +120,9 @@ were made from the old ledger).
 | `just stop` | Stops the analytics daemon and dashboard, the benchmark's SurrealDB, the explorer, the syncer, SurrealDB and the sandbox, and waits until their ports are free |
 | `just demo-reset` | Stops everything and deletes `.demo/logs`, `.demo/run`, `.demo/explorer` and the analytics tables and dashboard settings; keeps the installed tools and the benchmarks' data |
 
-The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
-(gitignored).
+The logs are in `.demo/logs/`, with the last build's full cargo output in
+`build.log` (the terminal shows one progress line per build). Everything the
+demo creates is under `.demo/` (gitignored).
 
 ## Analytics
 
@@ -271,6 +272,7 @@ use it too, and a person can follow it as a checklist.
 | `analytics/` | The ticket analytics plugins (`plugins/`, a workspace of its own built for `wasm32-wasip2`), the plugin interface they build against (`wit/`, a copy of the syncer's), and the benchmark (`bench/`) |
 | `.claude/skills/` | A skill for adapting the analytics plugins to another Daml model |
 | `scripts/demo.sh` | Starts, waits for and stops the background services |
+| `scripts/build.sh` | Runs a build with one progress line instead of cargo's full output |
 | `justfile` | The recipes, and the pinned tags of the tools |
 
 ## Changing things
