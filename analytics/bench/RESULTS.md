@@ -139,9 +139,10 @@ Suggested beats:
    lines as they print, and pause on the head-to-head block.
 2. **Cut to a caption card** with the 1-million figures from the table above,
    since that run takes about 1.5 minutes.
-3. **Explorer:** `just analytics-tools && just analytics-dashboard
-   .demo/analytics/bench-surreal-tables`. Open the Dashboard tab, show the
-   column chart, and switch Day ↔ Week. Each chart shows its own query time.
+3. **Explorer:** `just analytics-tools && just analytics-bench-surreal-db`.
+   Open the Dashboard tab, show the column chart, and switch Day ↔ Week. Each
+   chart shows its own query time. Clicking a column opens its transactions in
+   the Graph tab, which needs the benchmark's SurrealDB this recipe starts.
 4. **Close on the one-line finding** above.
 
 Caveats to keep in the narration:

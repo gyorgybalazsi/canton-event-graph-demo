@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `just analytics` checks that the demo's SurrealDB port is listening before
   creating its database user or starting the daemon, and tells you to run
   `just demo` if it is not.
+- `just --list` shows `demo`'s own description again, not a comment line
+  below it.
+- `just explorer-limit` works before the explorer has ever been opened, and no
+  longer leaves a `config.toml.bak` behind.
+- `just status` reports the benchmark's SurrealDB, which `just stop` already
+  stopped.
 
 ### Changed
 - The ticket plugins' query reads only an agreement's time and price; it no
@@ -49,6 +55,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `just analytics` restarts a running daemon, so it loads the plugins it has
   just built.
 - `just analytics-bench` times the dashboards per day and per week.
+- Justfile cleanup: the benchmark's SurrealDB starts from one helper with the
+  demo's root password variable; `just tickets` now needs `jq` like `just show`;
+  shorter descriptions for the two benchmarks (A and B, as in RESULTS.md). The
+  README's recipe table lists what `stop`, `demo-reset` and `logs` cover now.
+  `just analytics-bench-surreal` ends by pointing only at
+  `just analytics-bench-surreal-db`, which opens the tables and the ledger
+  behind them, so clicking a column works.
+- Builds show where they are instead of going quiet for minutes: each tool
+  install, the app, the plugins and the benchmark get one line that updates
+  in place (phase, crates compiled, the crate being compiled, elapsed time) and
+  ends with a ✓ line. A build with nothing to do prints nothing, and a failed
+  one prints the errors from its log (`.demo/logs/build.log`).
+  `scripts/build.sh` does this.
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.

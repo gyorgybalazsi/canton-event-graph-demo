@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Starts, waits for and stops the demo's background services (sandbox,
-# SurrealDB, syncer, explorer). Each one runs with its output in .demo/logs/<name>.log
-# and its process id in .demo/run/<name>.pid. Works on macOS and Linux.
+# SurrealDB, syncer, explorer, analytics, dashboard, bench-surreal). Each one
+# runs with its output in .demo/logs/<name>.log and its process id in
+# .demo/run/<name>.pid. Works on macOS and Linux.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,6 +15,7 @@ die() { echo "error: $*" >&2; exit 1; }
 # Whether something listens on 127.0.0.1:<port>.
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
+# Whether the named service's process is alive.
 running() {
     local pidfile="$run/$1.pid"
     [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null
@@ -83,7 +85,7 @@ stop() {
 
 status() {
     local name
-    for name in sandbox surreal syncer explorer analytics dashboard; do
+    for name in sandbox surreal syncer explorer analytics dashboard bench-surreal; do
         if running "$name"; then
             echo "$name: running (pid $(cat "$run/$name.pid"))"
         else
@@ -96,10 +98,11 @@ cmd="${1:-}"
 shift || true
 case "$cmd" in
     listening) listening "$@" ;;
+    running) running "$@" ;;
     start) start "$@" ;;
     wait-log) wait_log "$@" ;;
     wait-http) wait_http "$@" ;;
     stop) stop "$@" ;;
     status) status ;;
-    *) die "usage: $0 listening|start|wait-log|wait-http|stop|status ..." ;;
+    *) die "usage: $0 listening|running|start|wait-log|wait-http|stop|status ..." ;;
 esac

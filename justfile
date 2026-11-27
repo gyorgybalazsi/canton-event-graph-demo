@@ -24,6 +24,8 @@ explorer_path := env("EXPLORER_PATH", "")
 demo := justfile_directory() / ".demo"
 bin := demo / "bin"
 svc := justfile_directory() / "scripts/demo.sh"
+# Runs a build with one progress line instead of cargo's full output.
+build := justfile_directory() / "scripts/build.sh"
 dar := justfile_directory() / "daml/.daml/dist/ticket-purchase-0.1.0.dar"
 
 analytics := demo / "analytics"
@@ -41,21 +43,18 @@ surreal_root_pass := "root"
 syncer_pass := "syncer"
 # Seconds `just demo` waits after each transaction of the first, guided purchase.
 guided_pause := env("DEMO_PAUSE", "4")
-# Hides cargo's "already installed" and toolchain notes; real errors still show.
-quiet := "{ grep -v -e 'Ignored package' -e 'is already installed' -e 'toolchain' -e '^$' >&2 || true; }"
 # Whether cargo's install record in .demo matches a pattern (a tool at the pinned
 # tag, or the explorer installed from a local clone, is not fetched again).
 installed := "grep -qsE"
-# Prints the last statement's rows, one per line (as JSON without jq).
 
 # List the recipes
 default:
     @just --list --unsorted
 
 # Run the whole demo: start everything, open the explorer on the empty graph, buy one ticket step by step, then two more
-# SurrealDB and the explorer come first, so the explorer is open on the empty
-# graph and everything after it, setup included, shows up as it happens.
 demo: tools surreal explorer build-dar sandbox setup sync
+    @# SurrealDB and the explorer come first, so the explorer is open on the empty
+    @# graph and everything after it, setup included, shows up as it happens.
     @just purchase 1 {{guided_pause}}
     @just purchase 2
 
@@ -66,16 +65,15 @@ demo-reset: stop
 
 # Install the syncer, the code generator and the explorer into .demo/bin (skips what is already installed)
 tools:
-    @echo "▶ Installing syncer, daml-rust-codegen and surrealdb-explorer (pinned versions)"
     @mkdir -p "{{bin}}"
     @{{installed}} "syncer .*tag={{syncer_tag}}" "{{demo}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{demo}}" --git {{syncer_git}} --tag {{syncer_tag}} syncer 2>&1 | {{quiet}}
+        "{{build}}" "syncer {{syncer_tag}}" cargo install --locked --root "{{demo}}" --git {{syncer_git}} --tag {{syncer_tag}} syncer
     @{{installed}} "daml-rust-codegen .*tag={{codegen_tag}}" "{{demo}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{demo}}" --git {{codegen_git}} --tag {{codegen_tag}} daml-rust-codegen 2>&1 | {{quiet}}
+        "{{build}}" "daml-rust-codegen {{codegen_tag}}" cargo install --locked --root "{{demo}}" --git {{codegen_git}} --tag {{codegen_tag}} daml-rust-codegen
     @if [[ -n "{{explorer_path}}" ]]; then \
-        cargo install --quiet --locked --force --root "{{demo}}" --path "{{explorer_path}}" 2>&1 | {{quiet}}; \
+        "{{build}}" "surrealdb-explorer from {{explorer_path}}" cargo install --locked --force --root "{{demo}}" --path "{{explorer_path}}"; \
     elif ! {{installed}} "surrealdb-explorer .*(tag={{explorer_tag}}|path\+)" "{{demo}}/.crates.toml"; then \
-        cargo install --quiet --locked --root "{{demo}}" --git {{explorer_git}} --tag {{explorer_tag}} surrealdb-explorer 2>&1 | {{quiet}}; \
+        "{{build}}" "surrealdb-explorer {{explorer_tag}}" cargo install --locked --root "{{demo}}" --git {{explorer_git}} --tag {{explorer_tag}} surrealdb-explorer; \
     fi
 
 # Build the ticket purchase DAR (needs the Daml SDK's dpm)
@@ -87,7 +85,7 @@ build-dar:
 # Start a Canton sandbox on port 6865 in the background
 sandbox:
     @echo "▶ Starting the Canton sandbox (port {{ledger_port}})"
-    @if "{{svc}}" listening {{ledger_port}} && [[ "$("{{svc}}" status)" != *"sandbox: running"* ]]; then \
+    @if "{{svc}}" listening {{ledger_port}} && ! "{{svc}}" running sandbox; then \
         echo "error: something else already listens on port {{ledger_port}} (another sandbox?)" >&2; exit 1; \
     fi
     @"{{svc}}" start sandbox daml dpm sandbox
@@ -96,12 +94,12 @@ sandbox:
 # Start an in-memory SurrealDB server and create the syncer's database user
 surreal:
     @echo "▶ Starting SurrealDB (port {{surreal_port}}) and creating the syncer's database user"
-    @if "{{svc}}" listening {{surreal_port}} && [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then \
+    @if "{{svc}}" listening {{surreal_port}} && ! "{{svc}}" running surreal; then \
         echo "error: something else already listens on port {{surreal_port}}; set DEMO_SURREAL_PORT" >&2; exit 1; \
     fi
     @# A fresh in-memory database starts the ledger over, so the analytics
     @# tables made from the last one no longer match it: start them over too.
-    @if [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then rm -rf "{{analytics}}/tables"; fi
+    @if ! "{{svc}}" running surreal; then rm -rf "{{analytics}}/tables"; fi
     @"{{svc}}" start surreal . surreal db start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
     @"{{svc}}" wait-http surreal {{surreal_http}}/health 30
     @just _sql "DEFINE NAMESPACE IF NOT EXISTS canton; USE NS canton; \
@@ -111,6 +109,7 @@ surreal:
 # Upload the DAR and allocate Alice, TicketWizard and ScroogeBank
 setup:
     @echo "▶ Uploading the model and allocating Alice, TicketWizard and ScroogeBank"
+    @"{{build}}" "the ticket purchase app" cargo build -p ticket-purchase
     @cargo run --quiet -p ticket-purchase -- setup --dar "{{dar}}"
 
 # Start the syncer in the background, following every party on the sandbox
@@ -128,11 +127,15 @@ purchase count="3" pause="0":
 # Open the explorer on the demo database, in the background
 explorer:
     @echo "▶ Opening the explorer (Canton view, refreshes by itself)"
+    @just _explorer-config
+    @"{{svc}}" start explorer "{{demo}}/explorer" "{{bin}}/surrealdb-explorer"
+    @sleep 3
+
+# Copy the explorer's settings into .demo/explorer on the first run; later runs keep what its Settings saved
+_explorer-config:
     @mkdir -p "{{demo}}/explorer"
     @[[ -f "{{demo}}/explorer/config.toml" ]] || \
         sed 's#ws://127.0.0.1:8001#ws://127.0.0.1:{{surreal_port}}#' config/explorer.toml > "{{demo}}/explorer/config.toml"
-    @"{{svc}}" start explorer "{{demo}}/explorer" "{{bin}}/surrealdb-explorer"
-    @sleep 3
 
 # Restart only the explorer (to pick up a newly installed build); the rest keeps running
 explorer-restart:
@@ -143,21 +146,22 @@ explorer-restart:
 explorer-limit n="5":
     @echo "▶ Showing only the latest {{n}} transactions in the explorer"
     @"{{svc}}" stop explorer > /dev/null
-    @sed -i.bak 's/^canton_transactions = .*/canton_transactions = {{n}}/' "{{demo}}/explorer/config.toml"
+    @just _explorer-config
+    @sed 's/^canton_transactions = .*/canton_transactions = {{n}}/' "{{demo}}/explorer/config.toml" > "{{demo}}/explorer/config.toml.new"
+    @mv "{{demo}}/explorer/config.toml.new" "{{demo}}/explorer/config.toml"
     @just explorer > /dev/null
 
-# Each ticket agreement with the price paid for it, found by walking the event graph
-tickets:
+# Each ticket agreement with the price paid for it, found by walking the event graph (needs jq)
+tickets: _jq
     @echo "▶ Ticket agreements and the price paid, from the event graph in SurrealDB"
     @just _sql "USE NS canton DB ticket_purchase; \
         SELECT offset, string::split(create_arguments.owner, '::')[0] AS owner, \
             (<-consequence<-exercised[WHERE choice_name = 'Accept']->target->created.create_arguments.price)[0] AS price \
         FROM created WHERE template.entity_name = 'TicketAgreement' ORDER BY offset;" \
-        | if command -v jq >/dev/null; then \
-            jq -r '.[-1].result[] | "  TX@\(.offset)  \(.owner) paid \(.price)"'; else cat; fi
+        | jq -r '.[-1].result[] | "  TX@\(.offset)  \(.owner) paid \(.price)"'
 
-# The events of the transaction at `offset`: created contracts' arguments and exercised choices' arguments
-show offset:
+# The events of the transaction at `offset`: created contracts' and exercised choices' arguments (needs jq)
+show offset: _jq
     @echo "▶ Events of TX@{{offset}} (party ids shortened, contract ids cut)"
     @just _sql "USE NS canton DB ticket_purchase; \
         SELECT node_id, name, 'exercised' AS kind, choice_argument AS args, acting_parties AS parties FROM exercised WHERE offset = {{offset}}; \
@@ -187,9 +191,13 @@ stop:
     @"{{svc}}" stop surreal
     @"{{svc}}" stop sandbox
 
-# Follow a service's log: sandbox, surreal, syncer, explorer, analytics or dashboard
+# Follow a service's log: sandbox, surreal, syncer, explorer, analytics, dashboard or bench-surreal
 logs name="syncer":
     tail -f "{{demo}}/logs/{{name}}.log"
+
+# Fail with a clear message when jq is missing
+_jq:
+    @command -v jq > /dev/null || { echo "error: this recipe needs jq (brew install jq, or apt install jq)" >&2; exit 1; }
 
 # Run SurrealQL as root on the demo server and fail on an error
 _sql query:
@@ -202,20 +210,19 @@ _sql query:
 
 # Install canton-analytics and a dashboard-enabled explorer into .demo/analytics/bin (skips what is already installed)
 analytics-tools:
-    @echo "▶ Installing canton-analytics and the explorer with its dashboard (pinned commits)"
     @mkdir -p "{{analytics_bin}}"
     @{{installed}} "canton-analytics .*#{{analytics_rev}}" "{{analytics}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{analytics}}" --git {{syncer_git}} --rev {{analytics_rev}} canton-analytics 2>&1 | {{quiet}}
+        "{{build}}" "canton-analytics at {{analytics_rev}}" cargo install --locked --root "{{analytics}}" --git {{syncer_git}} --rev {{analytics_rev}} canton-analytics
     @{{installed}} "surrealdb-explorer .*#{{explorer_dashboard_rev}}" "{{analytics}}/.crates.toml" || \
-        cargo install --quiet --locked --root "{{analytics}}" --git {{explorer_git}} --rev {{explorer_dashboard_rev}} \
-            --features dashboard surrealdb-explorer 2>&1 | {{quiet}}
+        "{{build}}" "explorer with its dashboard at {{explorer_dashboard_rev}}" cargo install --locked --root "{{analytics}}" \
+            --git {{explorer_git}} --rev {{explorer_dashboard_rev}} --features dashboard surrealdb-explorer
 
 # Build the ticket analytics plugins (WebAssembly) into .demo/analytics/plugins
 analytics-plugins:
     @echo "▶ Building the ticket analytics plugins"
-    @rustup target add wasm32-wasip2 2>&1 | {{quiet}}
+    @"{{build}}" "the wasm32-wasip2 target" rustup target add wasm32-wasip2
     @mkdir -p "{{plugins}}"
-    @cd analytics/plugins && cargo build --quiet --locked --release --target wasm32-wasip2
+    @cd analytics/plugins && "{{build}}" "the plugins" cargo build --locked --release --target wasm32-wasip2
     @for p in ticket_agreements ticket_value; do \
         cp analytics/plugins/target/wasm32-wasip2/release/$p.wasm "{{plugins}}/"; \
     done
@@ -238,55 +245,57 @@ analytics: analytics-tools analytics-plugins
 # Open the dashboard-enabled explorer on a tables folder (default: the daemon's), in the background
 analytics-dashboard tables=(analytics / "tables"):
     @echo "▶ Opening the explorer on {{tables}} (Dashboard tab; the Graph tab shows the demo's ledger)"
-    @"{{svc}}" stop dashboard > /dev/null
-    @mkdir -p "{{analytics}}/explorer" "{{tables}}"
     @# Without the demo's SurrealDB running (say, for the benchmark's tables), no database: it opens on the dashboard.
     @if "{{svc}}" listening {{surreal_port}}; then server=ws://127.0.0.1:{{surreal_port}}; else server=; fi; \
         just _dashboard "{{tables}}" "$server" ticket_purchase 50
 
-# Benchmark: write the ticket plugins' tables for a made-up ledger (default 10 million offsets) and time their dashboards
+# Benchmark A: write the plugins' tables for a made-up ledger (default 10 million offsets) and time the dashboards
 analytics-bench rows="10000000": analytics-plugins
     @rm -rf "{{analytics}}/bench-tables"
+    @"{{build}}" "the benchmark" cargo build --release -p ticket-bench
     cargo run --quiet --release -p ticket-bench -- table --tables "{{analytics}}/bench-tables" --rows {{rows}} \
         "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"
     @echo "Look at them with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-tables"
 
-# Benchmark B: load a made-up ledger (default 1 million purchases) into a fresh SurrealDB as the syncer writes it, time the daemon's catch-up into Delta tables, and ask SurrealDB and the tables for the same numbers
+# Benchmark B: time the daemon's catch-up from a fresh SurrealDB with a made-up ledger (default 1 million purchases)
 analytics-bench-surreal rows="1000000": analytics-plugins
+    @# Loads the made-up ledger in the shape the syncer writes it, times the daemon's
+    @# catch-up into Delta tables, then asks SurrealDB and the tables for the same numbers.
     @# A benchmark SurrealDB left over from an interrupted run: its data is thrown away anyway.
     @"{{svc}}" stop bench-surreal > /dev/null
     @if "{{svc}}" listening {{bench_surreal_port}}; then \
         echo "error: something already listens on port {{bench_surreal_port}}; set DEMO_BENCH_SURREAL_PORT" >&2; exit 1; \
     fi
     @rm -rf "{{analytics}}/bench-surreal" "{{analytics}}/bench-surreal-tables"
-    @mkdir -p "{{analytics}}/bench-surreal"
-    @# On disk (SurrealKV), as a real syncer's database would be.
-    @"{{svc}}" start bench-surreal "{{analytics}}/bench-surreal" \
-        surreal db start --user root --pass root --bind 127.0.0.1:{{bench_surreal_port}} surrealkv://db
-    @"{{svc}}" wait-http bench-surreal http://127.0.0.1:{{bench_surreal_port}}/health 30
-    @cargo run --quiet --release -p ticket-bench -- surreal --url ws://127.0.0.1:{{bench_surreal_port}} \
+    @"{{build}}" "the benchmark" cargo build --release -p ticket-bench
+    @just _bench-surreal
+    @cargo run --quiet --release -p ticket-bench -- surreal --url ws://127.0.0.1:{{bench_surreal_port}} --pass {{surreal_root_pass}} \
         --rows {{rows}} --tables "{{analytics}}/bench-surreal-tables" \
         "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"; \
         status=$?; "{{svc}}" stop bench-surreal > /dev/null; exit $status
-    @echo "Look at the tables with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-surreal-tables"
     @echo "Browse its ledger and tables with: just analytics-tools && just analytics-bench-surreal-db"
 
 # Start the last benchmark's SurrealDB again and open the explorer on it: its ledger in the Graph tab, its tables in the Dashboard tab
 analytics-bench-surreal-db:
     @test -d "{{analytics}}/bench-surreal/db" || { echo "No benchmark database yet: run just analytics-bench-surreal first" >&2; exit 1; }
-    @"{{svc}}" start bench-surreal "{{analytics}}/bench-surreal" \
-        surreal db start --user root --pass root --bind 127.0.0.1:{{bench_surreal_port}} surrealkv://db
-    @"{{svc}}" wait-http bench-surreal http://127.0.0.1:{{bench_surreal_port}}/health 30
+    @just _bench-surreal
     @echo "▶ Opening the explorer on the benchmark's ledger (Graph tab) and its tables (Dashboard tab); just stop stops both"
-    @"{{svc}}" stop dashboard > /dev/null
     @# 48 transactions: a multiple of the benchmark's three per purchase, so each row is cash, offer, accept.
     @just _dashboard "{{analytics}}/bench-surreal-tables" ws://127.0.0.1:{{bench_surreal_port}} ticket_bench 48
 
-# The dashboard-enabled explorer on a tables folder and a database ("" for none), in the background
+# The dashboard-enabled explorer on a tables folder and a database ("" for none), in the background; replaces one already open
 _dashboard tables server database transactions:
+    @"{{svc}}" stop dashboard > /dev/null
     @mkdir -p "{{analytics}}/explorer" "{{tables}}"
     @sed -e "s#ws://127.0.0.1:8001#{{server}}#" -e 's#^database = "ticket_purchase"#database = "{{database}}"#' \
         -e 's#^canton_transactions = 50#canton_transactions = {{transactions}}#' \
         config/explorer.toml > "{{analytics}}/explorer/config.toml"
     @printf '\n[analytics]\nlocation = "%s"\n' "$(cd "{{tables}}" && pwd)" >> "{{analytics}}/explorer/config.toml"
     @"{{svc}}" start dashboard "{{analytics}}/explorer" "{{analytics_bin}}/surrealdb-explorer"
+
+# Start the benchmark's SurrealDB on disk (SurrealKV, as a real syncer's database would be), in the background
+_bench-surreal:
+    @mkdir -p "{{analytics}}/bench-surreal"
+    @"{{svc}}" start bench-surreal "{{analytics}}/bench-surreal" \
+        surreal db start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{bench_surreal_port}} surrealkv://db
+    @"{{svc}}" wait-http bench-surreal http://127.0.0.1:{{bench_surreal_port}}/health 30
