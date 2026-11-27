@@ -1,6 +1,6 @@
 [package]
 name = "ticket-purchase"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Submits a scripted ticket purchase flow to a Canton sandbox, using Rust types generated from the Daml model"
 license = "MIT OR Apache-2.0"
@@ -9,10 +9,10 @@ publish = false
 # The Ledger API client crates come from canton-event-graph-syncer, pinned to
 # the same release tag as the syncer the justfile installs (syncer_tag).
 [dependencies]
-client = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.1.0" }
-ledger-api = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.1.0" }
-daml-type-rep = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.1.0" }
-derive-lapi-access = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.1.0" }
+client = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.2.0" }
+ledger-api = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.2.0" }
+daml-type-rep = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.2.0" }
+derive-lapi-access = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.2.0" }
 anyhow = "1.0.98"
 clap = { version = "4.5.40", features = ["derive"] }
 serde = { version = "1.0.219", features = ["derive"] }

@@ -6,19 +6,16 @@
 set shell := ["nu", "--no-config-file", "-c"]
 
 # The tools come from their own repositories, pinned to their release tags.
-# Bump a tag to try a newer version (and the `client`/`ledger-api` tags in
-# app/Cargo.toml together with syncer_tag).
+# Bump a tag to try a newer version (and the syncer crate tags in
+# app/Cargo.toml and analytics/bench/Cargo.toml together with syncer_tag).
+# The `analytics` recipes install canton-analytics and a dashboard-enabled
+# explorer from the same syncer and explorer tags.
 syncer_git := "https://github.com/gyorgybalazsi/canton-event-graph-syncer"
-syncer_tag := "v0.1.0"
+syncer_tag := "v0.2.0"
 codegen_git := "https://github.com/gyorgybalazsi/daml-rust-codegen"
 codegen_tag := "v0.1.0"
 explorer_git := "https://github.com/gyorgybalazsi/surrealdb-explorer"
-explorer_tag := "v0.1.0"
-# The analytics daemon and a dashboard-enabled explorer for the `analytics`
-# recipes. Pinned to commits on main until the analytics module gets a release
-# tag; bump `rev` in analytics/bench/Cargo.toml together with analytics_rev.
-analytics_rev := "e7c5ba0"
-explorer_dashboard_rev := "b69a51d"
+explorer_tag := "v0.2.0"
 # Set EXPLORER_PATH to a local clone of surrealdb-explorer to install from it
 # instead of GitHub (for example to try local changes).
 explorer_path := env("EXPLORER_PATH", "")
@@ -270,11 +267,11 @@ analytics-tools: _nu-version
     #!/usr/bin/env -S nu --no-config-file
     mkdir '{{analytics_bin}}'
     let record = ('{{analytics}}/.crates.toml' | if ($in | path exists) { open --raw $in } else { "" })
-    if not ($record =~ 'canton-analytics .*#{{analytics_rev}}') {
-        {{build}} "canton-analytics at {{analytics_rev}}" cargo install --locked --root '{{analytics}}' --git {{syncer_git}} --rev {{analytics_rev}} canton-analytics
+    if not ($record =~ 'canton-analytics .*tag={{syncer_tag}}') {
+        {{build}} "canton-analytics {{syncer_tag}}" cargo install --locked --root '{{analytics}}' --git {{syncer_git}} --tag {{syncer_tag}} canton-analytics
     }
-    if not ($record =~ 'surrealdb-explorer .*#{{explorer_dashboard_rev}}') {
-        {{build}} "explorer with its dashboard at {{explorer_dashboard_rev}}" cargo install --locked --root '{{analytics}}' --git {{explorer_git}} --rev {{explorer_dashboard_rev}} --features dashboard surrealdb-explorer
+    if not ($record =~ 'surrealdb-explorer .*tag={{explorer_tag}}') {
+        {{build}} "explorer {{explorer_tag}} with its dashboard" cargo install --locked --root '{{analytics}}' --git {{explorer_git}} --tag {{explorer_tag}} --features dashboard surrealdb-explorer
     }
 
 # Build the ticket analytics plugins (WebAssembly) into .demo/analytics/plugins
