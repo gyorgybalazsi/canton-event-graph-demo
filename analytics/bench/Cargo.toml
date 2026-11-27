@@ -1,18 +1,17 @@
 [package]
 name = "ticket-bench"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Benchmarks the canton-analytics dashboard over a big made-up ticket ledger"
 license = "MIT OR Apache-2.0"
 publish = false
 
-# The analytics daemon and reader come from canton-event-graph-syncer. They
-# are pinned to a commit on its main branch until the analytics module gets a
-# release tag; bump `rev` here and `analytics_rev` in the justfile
-# together.
+# The analytics daemon and reader come from canton-event-graph-syncer,
+# pinned to its release tag; bump it together with `syncer_tag` in the
+# justfile.
 [dependencies]
-canton-analytics = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "e7c5ba0", default-features = false }
-canton-analytics-reader = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "e7c5ba0" }
+canton-analytics = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.2.0", default-features = false }
+canton-analytics-reader = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", tag = "v0.2.0" }
 anyhow = "1"
 clap = { version = "4.5.40", features = ["derive"] }
 deltalake = { version = "1.1", features = ["datafusion"] }

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-27
+
 ### Added
 - Analytics: two canton-analytics plugins for the ticket model,
   `ticket-agreements` and `ticket-value`, each a column chart of the new
@@ -32,19 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Skills format), that guides a coding agent through adapting the ticket
   analytics plugins to another Daml model: the event and measures, the
   query over the syncer's records, the new plugin crates and their tests.
-
-### Fixed
-- `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved
-  the server command under `db`.
-- `just analytics` checks that the demo's SurrealDB port is listening before
-  creating its database user or starting the daemon, and tells you to run
-  `just demo` if it is not.
-- `just --list` shows `demo`'s own description again, not a comment line
-  below it.
-- `just explorer-limit` works before the explorer has ever been opened, and no
-  longer leaves a `config.toml.bak` behind.
-- `just status` reports the benchmark's SurrealDB, which `just stop` already
-  stopped.
 
 ### Changed
 - The recipes and the helper scripts are written in Nushell instead of bash:
@@ -76,13 +65,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.
-- The analytics pins point at the merged commits: the syncer's analytics crates
-  at `bdb8852` and the explorer's dashboard at `f51d815`, with fewer tick
-  labels, abbreviated numbers, fainter major gridlines, no minor gridlines,
-  darker chart axes and dashboard settings for the daemon's lag.
-- The analytics explorer pin moves to `b533d93` (explorer main), which adds
-  the Canton items to the record menu (lifecycle, show in table, filters,
-  more copies) and copying or saving a picture of the whole graph canvas.
+- The syncer and the explorer are pinned to their v0.2.0 tags
+  (`syncer_tag`, `explorer_tag`, and the syncer crates in `app/Cargo.toml`);
+  daml-rust-codegen stays at v0.1.0. The analytics daemon, the
+  dashboard-enabled explorer and the benchmark's analytics crates now install
+  from the same tags instead of commits on main, so `analytics_rev` and
+  `explorer_dashboard_rev` are gone.
+
+### Fixed
+- `just surreal` starts SurrealDB 4 with `surreal db start`; SurrealDB 4 moved
+  the server command under `db`.
+- `just analytics` checks that the demo's SurrealDB port is listening before
+  creating its database user or starting the daemon, and tells you to run
+  `just demo` if it is not.
+- `just --list` shows `demo`'s own description again, not a comment line
+  below it.
+- `just explorer-limit` works before the explorer has ever been opened, and no
+  longer leaves a `config.toml.bak` behind.
+- `just status` reports the benchmark's SurrealDB, which `just stop` already
+  stopped.
 
 ## [0.1.0] - 2026-11-23
 
@@ -114,5 +115,6 @@ command.
   `derive-lapi-access` crates), daml-rust-codegen v0.1.0 and surrealdb-explorer
   v0.1.0.
 
-[Unreleased]: https://github.com/gyorgybalazsi/canton-event-graph-demo/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/gyorgybalazsi/canton-event-graph-demo/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/gyorgybalazsi/canton-event-graph-demo/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gyorgybalazsi/canton-event-graph-demo/releases/tag/v0.1.0
