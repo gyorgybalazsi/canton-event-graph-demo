@@ -15,6 +15,7 @@ die() { echo "error: $*" >&2; exit 1; }
 # Whether something listens on 127.0.0.1:<port>.
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
+# Whether the named service's process is alive.
 running() {
     local pidfile="$run/$1.pid"
     [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null
@@ -97,10 +98,11 @@ cmd="${1:-}"
 shift || true
 case "$cmd" in
     listening) listening "$@" ;;
+    running) running "$@" ;;
     start) start "$@" ;;
     wait-log) wait_log "$@" ;;
     wait-http) wait_http "$@" ;;
     stop) stop "$@" ;;
     status) status ;;
-    *) die "usage: $0 listening|start|wait-log|wait-http|stop|status ..." ;;
+    *) die "usage: $0 listening|running|start|wait-log|wait-http|stop|status ..." ;;
 esac

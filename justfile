@@ -86,7 +86,7 @@ build-dar:
 # Start a Canton sandbox on port 6865 in the background
 sandbox:
     @echo "▶ Starting the Canton sandbox (port {{ledger_port}})"
-    @if "{{svc}}" listening {{ledger_port}} && [[ "$("{{svc}}" status)" != *"sandbox: running"* ]]; then \
+    @if "{{svc}}" listening {{ledger_port}} && ! "{{svc}}" running sandbox; then \
         echo "error: something else already listens on port {{ledger_port}} (another sandbox?)" >&2; exit 1; \
     fi
     @"{{svc}}" start sandbox daml dpm sandbox
@@ -95,12 +95,12 @@ sandbox:
 # Start an in-memory SurrealDB server and create the syncer's database user
 surreal:
     @echo "▶ Starting SurrealDB (port {{surreal_port}}) and creating the syncer's database user"
-    @if "{{svc}}" listening {{surreal_port}} && [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then \
+    @if "{{svc}}" listening {{surreal_port}} && ! "{{svc}}" running surreal; then \
         echo "error: something else already listens on port {{surreal_port}}; set DEMO_SURREAL_PORT" >&2; exit 1; \
     fi
     @# A fresh in-memory database starts the ledger over, so the analytics
     @# tables made from the last one no longer match it: start them over too.
-    @if [[ "$("{{svc}}" status)" != *"surreal: running"* ]]; then rm -rf "{{analytics}}/tables"; fi
+    @if ! "{{svc}}" running surreal; then rm -rf "{{analytics}}/tables"; fi
     @"{{svc}}" start surreal . surreal db start --user root --pass {{surreal_root_pass}} --bind 127.0.0.1:{{surreal_port}} memory
     @"{{svc}}" wait-http surreal {{surreal_http}}/health 30
     @just _sql "DEFINE NAMESPACE IF NOT EXISTS canton; USE NS canton; \
