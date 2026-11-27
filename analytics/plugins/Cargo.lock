@@ -565,7 +565,7 @@ dependencies = [
 
 [[package]]
 name = "ticket-agreements"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ticket-totals",
  "wit-bindgen",
@@ -573,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "ticket-totals"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrow-array",
  "arrow-ipc",
@@ -583,7 +583,7 @@ dependencies = [
 
 [[package]]
 name = "ticket-value"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ticket-totals",
  "wit-bindgen",
