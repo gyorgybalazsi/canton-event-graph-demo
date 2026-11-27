@@ -272,7 +272,6 @@ analytics-bench-surreal rows="1000000": analytics-plugins
         --rows {{rows}} --tables "{{analytics}}/bench-surreal-tables" \
         "{{plugins}}/ticket_agreements.wasm" "{{plugins}}/ticket_value.wasm"; \
         status=$?; "{{svc}}" stop bench-surreal > /dev/null; exit $status
-    @echo "Look at the tables with: just analytics-tools && just analytics-dashboard {{analytics}}/bench-surreal-tables"
     @echo "Browse its ledger and tables with: just analytics-tools && just analytics-bench-surreal-db"
 
 # Start the last benchmark's SurrealDB again and open the explorer on it: its ledger in the Graph tab, its tables in the Dashboard tab

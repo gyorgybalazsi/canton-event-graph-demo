@@ -221,7 +221,7 @@ the Dashboard tab the benchmark's tables. `just stop` stops both.
 
 ```bash
 just analytics-bench-surreal            # or: just analytics-bench-surreal 100000
-just analytics-tools && just analytics-dashboard .demo/analytics/bench-surreal-tables
+just analytics-tools && just analytics-bench-surreal-db
 ```
 
 On a 4-core cloud machine with 20,000 full purchases (60,000 offsets) in an

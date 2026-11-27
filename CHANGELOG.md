@@ -59,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   demo's root password variable; `just tickets` now needs `jq` like `just show`;
   shorter descriptions for the two benchmarks (A and B, as in RESULTS.md). The
   README's recipe table lists what `stop`, `demo-reset` and `logs` cover now.
+  `just analytics-bench-surreal` ends by pointing only at
+  `just analytics-bench-surreal-db`, which opens the tables and the ledger
+  behind them, so clicking a column works.
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.
