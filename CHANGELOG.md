@@ -62,8 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   just built.
 - `just analytics-bench` times the dashboards per day and per week.
 - Justfile cleanup: the benchmark's SurrealDB starts from one helper with the
-  demo's root password variable; `just tickets` now needs `jq` like `just show`;
-  shorter descriptions for the two benchmarks (A and B, as in RESULTS.md). The
+  demo's root password variable; shorter descriptions for the two benchmarks (A and B, as in RESULTS.md). The
   README's recipe table lists what `stop`, `demo-reset` and `logs` cover now.
   `just analytics-bench-surreal` ends by pointing only at
   `just analytics-bench-surreal-db`, which opens the tables and the ledger
@@ -73,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in place (phase, crates compiled, the crate being compiled, elapsed time) and
   ends with a ✓ line. A build with nothing to do prints nothing, and a failed
   one prints the errors from its log (`.demo/logs/build.log`).
-  `scripts/build.sh` does this.
+  `scripts/build.nu` does this.
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.

@@ -41,10 +41,14 @@ def is-running [name: string] {
     $pid != null and (ps | where pid == $pid | is-not-empty)
 }
 
-# Whether something listens on 127.0.0.1:<port>. curl reports "couldn't
-# connect" (exit code 7) when nothing does.
+# Whether something listens on 127.0.0.1:<port>. Nushell has no plain TCP
+# connect, so curl's telnet:// does it: "couldn't connect" (exit code 7) means
+# nothing listens. A curl built without telnet (exit code 1) would otherwise
+# look like a port in use.
 def is-listening [port: int] {
-    ("" | ^curl -s --max-time 2 $"telnet://127.0.0.1:($port)" | complete).exit_code != 7
+    let code = ("" | ^curl -s --max-time 2 $"telnet://127.0.0.1:($port)" | complete).exit_code
+    if $code == 1 { die "this curl can't check ports (no telnet:// support)" }
+    $code != 7
 }
 
 # A process and everything it started (dpm starts a JVM, for example).
