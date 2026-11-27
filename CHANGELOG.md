@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `just analytics` checks that the demo's SurrealDB port is listening before
   creating its database user or starting the daemon, and tells you to run
   `just demo` if it is not.
+- `just --list` shows `demo`'s own description again, not a comment line
+  below it.
+- `just explorer-limit` works before the explorer has ever been opened, and no
+  longer leaves a `config.toml.bak` behind.
+- `just status` reports the benchmark's SurrealDB, which `just stop` already
+  stopped.
 
 ### Changed
 - The ticket plugins' query reads only an agreement's time and price; it no
@@ -49,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `just analytics` restarts a running daemon, so it loads the plugins it has
   just built.
 - `just analytics-bench` times the dashboards per day and per week.
+- Justfile cleanup: the benchmark's SurrealDB starts from one helper with the
+  demo's root password variable; `just tickets` now needs `jq` like `just show`;
+  shorter descriptions for the two benchmarks (A and B, as in RESULTS.md). The
+  README's recipe table lists what `stop`, `demo-reset` and `logs` cover now.
 - The README no longer calls surrealdb-explorer private: all three tools install
   from their public repositories. `EXPLORER_PATH` stays, for trying a local
   clone of the explorer.

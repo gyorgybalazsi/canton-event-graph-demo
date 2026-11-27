@@ -50,6 +50,7 @@ the `TicketAgreement`.
 - **[just](https://github.com/casey/just)** (`brew install just`)
 - **curl**, and network access to GitHub: `just tools` installs the three tools
   from their public repositories above
+- **[jq](https://jqlang.org)**, for `just tickets` and `just show` (`brew install jq`)
 
 Ports 6865–6869 (sandbox) and 8001 (SurrealDB) must be free. The demo uses
 8001 rather than SurrealDB's usual 8000 so it doesn't collide with a server
@@ -112,12 +113,12 @@ were made from the old ledger).
 | `just purchase [count] [pause]` | Buys `count` tickets (default 3), waiting `pause` seconds after each transaction (default 0) |
 | `just explorer-restart` | Restarts only the explorer, for example after installing a new build with `just tools`; the sandbox, SurrealDB and the syncer keep running |
 | `just explorer-limit [n]` | Reopens the explorer showing only the latest `n` transactions (default 5) |
-| `just tickets` | Lists each ticket agreement with the price paid for it, found by walking from the agreement to the `Accept` choice and its offer |
+| `just tickets` | Lists each ticket agreement with the price paid for it, found by walking from the agreement to the `Accept` choice and its offer (needs `jq`) |
 | `just show <offset>` | Prints the events of the transaction at `offset` in node order: each created contract's arguments and signatories, and each exercised choice's argument and acting parties (needs `jq`) |
-| `just status` | Shows what runs, and the transaction and contract counts in SurrealDB |
-| `just logs [name]` | Follows the log of `sandbox`, `surreal`, `syncer` or `explorer` |
-| `just stop` | Stops the explorer, the syncer, SurrealDB and the sandbox, and waits until their ports are free |
-| `just demo-reset` | Stops everything and deletes `.demo/logs`, `.demo/run` and `.demo/explorer` |
+| `just status` | Shows which services run, and the transaction and contract counts in SurrealDB |
+| `just logs [name]` | Follows the log of `sandbox`, `surreal`, `syncer`, `explorer`, `analytics`, `dashboard` or `bench-surreal` (default `syncer`) |
+| `just stop` | Stops the analytics daemon and dashboard, the benchmark's SurrealDB, the explorer, the syncer, SurrealDB and the sandbox, and waits until their ports are free |
+| `just demo-reset` | Stops everything and deletes `.demo/logs`, `.demo/run`, `.demo/explorer` and the analytics tables and dashboard settings; keeps the installed tools and the benchmarks' data |
 
 The logs are in `.demo/logs/`. Everything the demo creates is under `.demo/`
 (gitignored).

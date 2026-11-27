@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Starts, waits for and stops the demo's background services (sandbox,
-# SurrealDB, syncer, explorer). Each one runs with its output in .demo/logs/<name>.log
-# and its process id in .demo/run/<name>.pid. Works on macOS and Linux.
+# SurrealDB, syncer, explorer, analytics, dashboard, bench-surreal). Each one
+# runs with its output in .demo/logs/<name>.log and its process id in
+# .demo/run/<name>.pid. Works on macOS and Linux.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -83,7 +84,7 @@ stop() {
 
 status() {
     local name
-    for name in sandbox surreal syncer explorer analytics dashboard; do
+    for name in sandbox surreal syncer explorer analytics dashboard bench-surreal; do
         if running "$name"; then
             echo "$name: running (pid $(cat "$run/$name.pid"))"
         else
