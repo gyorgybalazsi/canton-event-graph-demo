@@ -611,12 +611,13 @@ fn periods(frame: &Frame, column: &str) -> Result<Vec<(i64, f64)>> {
         .collect())
 }
 
-/// Equal periods and amounts; values may differ by rounding in the sums.
+/// Equal periods and amounts; the chart shows value in whole units, and sums
+/// may differ in their last digits.
 fn same(a: &[(i64, f64)], b: &[(i64, f64)]) -> bool {
     a.len() == b.len()
         && a.iter()
             .zip(b)
-            .all(|(x, y)| x.0 == y.0 && (x.1 - y.1).abs() <= 0.005 + 1e-9 * y.1.abs())
+            .all(|(x, y)| x.0 == y.0 && (x.1 - y.1).abs() <= 0.5 + 1e-9 * y.1.abs())
 }
 
 fn first_difference(a: &[(i64, f64)], b: &[(i64, f64)]) -> String {

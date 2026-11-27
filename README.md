@@ -161,9 +161,11 @@ how often the explorer looks for a commit, and how often the daemon checks
 the ledger and how many rows (or seconds) it collects before committing. The
 daemon takes up its part without a restart.
 
-Each plugin's dashboard shows headline figures above its chart: the newest
-day's or week's amount (which may still be under way), the one before, the
-change between them, the best, and the total. Hover over a column to read its
+Each plugin's dashboard shows headline figures above its chart, each named
+for the day or week it covers: the last full week, the week before it and
+the change between them, the newest week so far (it may still be under way),
+the best week, and the total since the start, the only figure that adds up
+more than one period. Value is in whole units. Hover over a column to read its
 exact amount, and pick how far back the chart goes (All, Year, 90 days, 30
 days). Click a column to see its transactions: the explorer switches to the
 Graph tab's Canton view on that day or week, or on its last transactions

@@ -165,6 +165,14 @@ impl Measure {
         }
     }
 
+    /// `expr` as shown on the dashboard: money in whole units.
+    fn whole(self, expr: &str) -> String {
+        match self {
+            Measure::Agreements => expr.to_string(),
+            Measure::Value => format!("round({expr})"),
+        }
+    }
+
     fn data_type(self) -> DataType {
         match self {
             Measure::Agreements => DataType::Int64,
@@ -195,23 +203,32 @@ impl Spec {
         }
     }
 
-    /// One row: the newest day's or week's amount, the one before it, the
-    /// change between them, the best, and the total. The newest period may
-    /// still be under way.
+    /// One row. Each figure's name says which day or week it covers
+    /// (`{period_name}`), and only the total adds up more than one. The
+    /// newest period may still be under way, so it is "so far", and the
+    /// change compares the two before it, which are complete. Values are
+    /// in whole units.
     pub fn headline_sql(&self) -> String {
         format!(
             "WITH p AS (SELECT date_bin({{period}}, {DAY}, TIMESTAMP '2001-01-01T00:00:00Z') AS period_start, \
                sum({m}) AS m FROM {t} GROUP BY 1), \
-             r AS (SELECT m, lag(m) OVER (ORDER BY period_start) AS before, \
-               row_number() OVER (ORDER BY period_start DESC) AS k FROM p) \
-             SELECT r.m AS \"latest\", r.before AS \"the one before\", \
-               CASE WHEN r.before IS NULL OR r.before = 0 THEN '–' \
-                 ELSE concat(CASE WHEN r.m > r.before THEN '+' ELSE '' END, \
-                   CAST(round((r.m - r.before) * 100.0 / r.before) AS BIGINT), '%') END AS \"change\", \
-               a.best AS \"best\", a.total AS \"all time\" \
-             FROM r CROSS JOIN (SELECT max(m) AS best, sum(m) AS total FROM p) a WHERE r.k = 1",
+             r AS (SELECT m, row_number() OVER (ORDER BY period_start DESC) AS k FROM p), \
+             f AS (SELECT max(CASE WHEN k = 2 THEN m END) AS last_full, max(CASE WHEN k = 3 THEN m END) AS before, \
+               max(CASE WHEN k = 1 THEN m END) AS so_far, max(m) AS best, sum(m) AS total FROM r) \
+             SELECT {last_full} AS \"last full {{period_name}}\", {before} AS \"the {{period_name}} before\", \
+               CASE WHEN before IS NULL OR before = 0 OR last_full IS NULL THEN '–' \
+                 ELSE concat(CASE WHEN last_full > before THEN '+' ELSE '' END, \
+                   CAST(round((last_full - before) * 100.0 / before) AS BIGINT), '%') END AS \"change\", \
+               {so_far} AS \"newest {{period_name}} so far\", {best} AS \"best {{period_name}}\", \
+               {total} AS \"total since the start\" \
+             FROM f",
             m = self.measure.column(),
             t = self.table(),
+            last_full = self.measure.whole("last_full"),
+            before = self.measure.whole("before"),
+            so_far = self.measure.whole("so_far"),
+            best = self.measure.whole("best"),
+            total = self.measure.whole("total"),
         )
     }
 
@@ -233,9 +250,10 @@ impl Spec {
     pub fn chart_sql(&self) -> String {
         format!(
             "SELECT date_bin({{period}}, {DAY}, TIMESTAMP '2001-01-01T00:00:00Z') AS period_start, \
-             sum({m}) AS \"{m}\", min({FIRST_OFFSET}) AS {FIRST_OFFSET}, max({LAST_OFFSET}) AS {LAST_OFFSET} \
+             {sum} AS \"{m}\", min({FIRST_OFFSET}) AS {FIRST_OFFSET}, max({LAST_OFFSET}) AS {LAST_OFFSET} \
              FROM {t} GROUP BY 1 ORDER BY 1",
             m = self.measure.column(),
+            sum = self.measure.whole(&format!("sum({})", self.measure.column())),
             t = self.table(),
         )
     }
