@@ -161,6 +161,17 @@ how often the explorer looks for a commit, and how often the daemon checks
 the ledger and how many rows (or seconds) it collects before committing. The
 daemon takes up its part without a restart.
 
+Each plugin's dashboard shows headline figures above its chart, each named
+for the day or week it covers: the last full week, the week before it and
+the change between them, the newest week so far (it may still be under way),
+the best week, and the total since the start, the only figure that adds up
+more than one period. Value is in whole units. Hover over a column to read its
+exact amount, and pick how far back the chart goes (All, Year, 90 days, 30
+days). Click a column to see its transactions: the explorer switches to the
+Graph tab's Canton view on that day or week, or on its last transactions
+(as many as the sidebar's **Latest** box says) when there are more, with the
+paging buttons for the rest.
+
 **How fast over a big ledger.** `just analytics-bench` makes up a year-long
 ledger of 10 million ticket purchases, one per offset, runs it through both plugins and
 the daemon's own table writer (commits of a million offsets, then
@@ -204,7 +215,7 @@ just analytics-tools && just analytics-bench-surreal-db
 ```
 
 It opens the explorer on the benchmark's SurrealDB (`ws://127.0.0.1:8002`,
-database `ticket_bench`): the Graph tab shows the newest 50 transactions, and
+database `ticket_bench`): the Graph tab shows the newest 48 transactions (16 purchases, one per row), and
 the Dashboard tab the benchmark's tables. `just stop` stops both.
 
 ```bash

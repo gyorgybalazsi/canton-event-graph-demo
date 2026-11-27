@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes it, times the daemon's catch-up from offset 0, and times the same
   per-day and per-week numbers in SurrealQL and in DataFusion, checking that
   they agree on the agreements and the value of every day and week.
+- The ticket dashboards show headline figures above the chart, each named
+  for the day or week it covers (last full week, the week before, the change
+  between them, newest week so far, best week, total since the start), with
+  value in whole units, and each
+  day's row keeps the ledger offsets of its first and last agreement, so a
+  click on a column in the explorer shows that day's or week's transactions.
+  The tables gained two columns: remove tables written by an earlier version
+  (`just demo-reset`, or a fresh `just demo` with SurrealDB stopped).
 - A skill, `adapt-analytics-plugins` (in `.claude/skills`, in the Agent
   Skills format), that guides a coding agent through adapting the ticket
   analytics plugins to another Daml model: the event and measures, the

@@ -11,8 +11,8 @@ publish = false
 # release tag; bump `rev` here and `analytics_rev` in the justfile
 # together.
 [dependencies]
-canton-analytics = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "bdb8852", default-features = false }
-canton-analytics-reader = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "bdb8852" }
+canton-analytics = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "e7c5ba0", default-features = false }
+canton-analytics-reader = { git = "https://github.com/gyorgybalazsi/canton-event-graph-syncer", rev = "e7c5ba0" }
 anyhow = "1"
 clap = { version = "4.5.40", features = ["derive"] }
 deltalake = { version = "1.1", features = ["datafusion"] }
