@@ -50,7 +50,7 @@ the `TicketAgreement`.
 - **[just](https://github.com/casey/just)** (`brew install just`)
 - **curl**, and network access to GitHub: `just tools` installs the three tools
   from their public repositories above
-- **[jq](https://jqlang.org)**, for `just tickets` and `just show` (`brew install jq`)
+- **[Nushell](https://www.nushell.sh) 0.117 or newer**, the `nu` program (`brew install nushell`): the recipes and `scripts/` are written in it
 
 Ports 6865–6869 (sandbox) and 8001 (SurrealDB) must be free. The demo uses
 8001 rather than SurrealDB's usual 8000 so it doesn't collide with a server
@@ -113,8 +113,8 @@ were made from the old ledger).
 | `just purchase [count] [pause]` | Buys `count` tickets (default 3), waiting `pause` seconds after each transaction (default 0) |
 | `just explorer-restart` | Restarts only the explorer, for example after installing a new build with `just tools`; the sandbox, SurrealDB and the syncer keep running |
 | `just explorer-limit [n]` | Reopens the explorer showing only the latest `n` transactions (default 5) |
-| `just tickets` | Lists each ticket agreement with the price paid for it, found by walking from the agreement to the `Accept` choice and its offer (needs `jq`) |
-| `just show <offset>` | Prints the events of the transaction at `offset` in node order: each created contract's arguments and signatories, and each exercised choice's argument and acting parties (needs `jq`) |
+| `just tickets` | Lists each ticket agreement with the price paid for it, found by walking from the agreement to the `Accept` choice and its offer |
+| `just show <offset>` | Prints the events of the transaction at `offset` in node order: each created contract's arguments and signatories, and each exercised choice's argument and acting parties |
 | `just status` | Shows which services run, and the transaction and contract counts in SurrealDB |
 | `just logs [name]` | Follows the log of `sandbox`, `surreal`, `syncer`, `explorer`, `analytics`, `dashboard` or `bench-surreal` (default `syncer`) |
 | `just stop` | Stops the analytics daemon and dashboard, the benchmark's SurrealDB, the explorer, the syncer, SurrealDB and the sandbox, and waits until their ports are free |
@@ -271,8 +271,8 @@ use it too, and a person can follow it as a checklist.
 | `config/` | The syncer's and the explorer's settings for the demo |
 | `analytics/` | The ticket analytics plugins (`plugins/`, a workspace of its own built for `wasm32-wasip2`), the plugin interface they build against (`wit/`, a copy of the syncer's), and the benchmark (`bench/`) |
 | `.claude/skills/` | A skill for adapting the analytics plugins to another Daml model |
-| `scripts/demo.sh` | Starts, waits for and stops the background services |
-| `scripts/build.sh` | Runs a build with one progress line instead of cargo's full output |
+| `scripts/demo.nu` | Starts, waits for and stops the background services, and runs SurrealQL on the demo's server (Nushell) |
+| `scripts/build.nu` | Runs a build with one progress line instead of cargo's full output (Nushell) |
 | `justfile` | The recipes, and the pinned tags of the tools |
 
 ## Changing things

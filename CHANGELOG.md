@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopped.
 
 ### Changed
+- The recipes and the helper scripts are written in Nushell instead of bash:
+  `scripts/demo.nu` and `scripts/build.nu` replace `demo.sh` and `build.sh`,
+  and the justfile runs its recipes with `nu`. Nushell 0.117 or newer is now
+  a prerequisite (`just tools` checks the version), and `jq` no longer is:
+  `just tickets`, `just show` and `just status` read SurrealDB's JSON
+  natively, and `just status` shows tables.
 - The ticket plugins' query reads only an agreement's time and price; it no
   longer looks up each offer's organizer, which nothing charts (catch-up about
   15% faster on 50,000 purchases). They read those columns by name and give an
